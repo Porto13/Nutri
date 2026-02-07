@@ -433,7 +433,12 @@ def render_dashboard():
     col1, col2 = st.columns([1, 2])
     
     with col1:
+          # SAFE GOAL CHECK: Prevents crash if sheet has text/empty values
+    try:
         goal = float(user.get('Calorie_Goal', 2000))
+    except:
+        goal = 2000.0
+
         pct = min((totals['Calories']/goal)*100, 100) if goal > 0 else 0
         st.markdown(f"""
         <div class="glass-card" style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
