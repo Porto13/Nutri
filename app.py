@@ -18,6 +18,27 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+# -----------------------------------------------------------------------------
+# 1.5. GOOGLE SHEETS CONNECTION
+# -----------------------------------------------------------------------------
+try:
+    # Load credentials from Streamlit Secrets
+    scope = ['https://www.googleapis.com/auth/spreadsheets']
+    credentials = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"],
+        scopes=scope
+    )
+    client = gspread.authorize(credentials)
+    
+    # YOUR SHEET ID
+    SHEET_ID = "1_9K1IT3zaDGNKfxwnnSIe7L881wJWVdztIwGci3B0vg"
+    
+    # Open the sheet
+    sheet = client.open_by_key(SHEET_ID).sheet1
+    st.toast("✅ Google Sheets Connected!", icon="🚀")
+    
+except Exception as e:
+    st.error(f"❌ Connection Error: {e}")
 
 # Colors & Theme Constants
 THEME_BG = "#0f172a"
