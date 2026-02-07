@@ -733,14 +733,35 @@ def render_login():
             username = st.text_input("Identity Name", placeholder="Enter username", key="login_user")
             password = st.text_input("Private Key", type="password", placeholder="••••••••", key="login_pass")
             
-            if st.button("Authorize Session", type="primary"):
-                user = fetch_user_data(username, password)
-                if user:
-                    st.session_state.user = user
-                    st.rerun()
+                   if st.button("Authorize Session", type="primary"):
+                if username and password:
+                    try:
+                        # 1. GET ALL USERS FROM SHEET
+                        all_users = sheet.get_all_records()
+                        
+                        # 2. FIND THE MATCH
+                        found_user = None
+                        for user in all_users:
+                            # Check if Username and Password match
+                            if str(user.get("Username")) == username and str(user.get("Password")) == password:
+                                found_user = user
+                                break
+                        
+                        # 3. SUCCESS OR FAIL
+                        if found_user:
+                            st.success(f"Welcome back, {username}!")
+                            st.session_state.authenticated = True
+                            st.session_state.user = found_user
+                            st.session_state.active_tab = "Dashboard"
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error("ACCESS DENIED: Incorrect Username or Password.")
+                            
+                    except Exception as e:
+                        st.error(f"System Error: {e}")
                 else:
-                    st.error("Access Denied.")
-            st.caption("Default Demo: User: CyberAthlete / Pass: 123")
+                    st.warning("Please enter your credentials.")
 
         with tab_register:
             st.markdown("<h3>New Registration</h3>", unsafe_allow_html=True)
