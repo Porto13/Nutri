@@ -365,7 +365,12 @@ def display_height(val, system):
 # -----------------------------------------------------------------------------
 
 def render_rank_card(user):
-    pts = user.get('Rank_Points_Counter', 0)
+        # SAFE CONVERSION: Convert to integer, defaulting to 0 if empty or text
+    try:
+        pts = int(user.get('Rank_Points_Counter', 0))
+    except:
+        pts = 0
+
     
     if pts > 450:
         tier, next_tier, min_p, max_p, color, icon = 'Platinum', 'Max Rank', 450, 1000, 'linear-gradient(to right, #22d3ee, #2563eb)', '💠'
