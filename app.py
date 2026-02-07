@@ -733,7 +733,7 @@ def render_login():
             username = st.text_input("Identity Name", placeholder="Enter username", key="login_user")
             password = st.text_input("Private Key", type="password", placeholder="••••••••", key="login_pass")
             
-           if st.button("Authorize Session", type="primary"):
+            if st.button("Authorize Session", type="primary"):
         if username and password:
             try:
                 # 1. GET ALL USERS FROM SHEET
