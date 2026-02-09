@@ -18,8 +18,31 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
 # -----------------------------------------------------------------------------
-# 1.5. GOOGLE SHEETS CONNECTION
+# 1.5. HELPER FUNCTIONS (Fixes Crash Issues)
+# -----------------------------------------------------------------------------
+
+def safe_float(val, default=0.0):
+    """Safely converts a value to float, handling None, empty strings, and errors."""
+    if val is None or val == "":
+        return default
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return default
+
+def safe_int(val, default=0):
+    """Safely converts a value to int."""
+    if val is None or val == "":
+        return default
+    try:
+        return int(float(val)) # float cast handles "2000.0" strings
+    except (ValueError, TypeError):
+        return default
+
+# -----------------------------------------------------------------------------
+# 2. GOOGLE SHEETS CONNECTION
 # -----------------------------------------------------------------------------
 try:
     # Load credentials from Streamlit Secrets
@@ -35,7 +58,7 @@ try:
     
     # Open the sheet
     sheet = client.open_by_key(SHEET_ID).sheet1
-    st.toast("✅ Google Sheets Connected!", icon="🚀")
+    # FIX: Removed the st.toast that appeared on every reload
     
 except Exception as e:
     st.error(f"❌ Connection Error: {e}")
@@ -50,7 +73,7 @@ ACCENT_INDIGO = "#6366f1"
 ACCENT_AMBER = "#f59e0b"
 
 # -----------------------------------------------------------------------------
-# 2. CUSTOM CSS (Cyberpunk/Glassmorphism Re-creation)
+# 3. CUSTOM CSS (Cyberpunk/Glassmorphism Re-creation)
 # -----------------------------------------------------------------------------
 
 st.markdown(f"""
@@ -169,7 +192,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 3. BACKEND: GOOGLE SHEETS & GEMINI
+# 4. BACKEND LOGIC
 # -----------------------------------------------------------------------------
 
 # Initialize Session State
@@ -224,34 +247,6 @@ def fetch_all_users():
     except:
         return []
 
-def fetch_user_data(username, password):
-    """Login logic."""
-    client = get_db_connection()
-    # Mock fallback for demo if no DB configured
-    if not client:
-        if username == "CyberAthlete" and password == "123":
-            return {
-                "User_ID": "u_demo", "Username": "CyberAthlete", "Password": "123",
-                "Calorie_Goal": 2500, "Protein_Goal": 180, "Carbs_Goal": 250, "Saturated_Fat_Goal": 20,
-                "Unsaturated_Fat_Goal": 60, "Fiber_Goal": 30, "Sugar_Goal": 40, 
-                "Sodium_Goal": 2300, "Potassium_Goal": 3500, "Iron_Goal": 18,
-                "Current_Rank_Tier": "Gold", "Current_Rank_Multiplier": 1.5, "Rank_Points_Counter": 320,
-                "Total_Daily_Completions": 12, "Total_Weekly_Wins": 3,
-                "Age": 28, "Gender": "Male", "Weight": 185.0, "Height": 72.0,
-                "Activity_Level": 1.55, "Primary_Directive": "Build Muscle", "Measurement_System": "imperial"
-            }
-        return None
-    
-    try:
-        sheet = client.open("NutriComp_DB").worksheet("User_Profiles")
-        records = sheet.get_all_records()
-        for r in records:
-            if str(r.get('Username')).lower() == username.lower() and str(r.get('Password')) == password:
-                return r
-        return None
-    except Exception as e:
-        return None
-
 def register_user(username, password):
     """Register new user."""
     client = get_db_connection()
@@ -273,10 +268,11 @@ def register_user(username, password):
             new_id, username, password, 
             2000, 150, 200, 20, 50, 25, 30, 2000, 3000, 15, # Default Macros
             "Bronze", 1.0, 0, 0, 0, # Rank Data
-            25, "Male", 70, 175, 1.2, "Maintain", "metric" # Demographics
+            25, "Male", 70, 175, 1.2, "Maintain", "metric", # Demographics
+            "No" # FIX: Approval Status (Default No)
         ]
         sheet.append_row(row)
-        return True, "Registration successful! Please login."
+        return True, "Registration successful! Account pending admin approval."
     except Exception as e:
         return False, f"Error: {str(e)}"
 
@@ -318,7 +314,6 @@ def update_user_targets_db(user_id, new_data):
     """Updates user profile using the Submit Button in Identity Tab."""
     client = get_db_connection()
     if not client:
-        # Mock update
         st.session_state.user.update(new_data)
         return True
 
@@ -328,19 +323,12 @@ def update_user_targets_db(user_id, new_data):
         cell = sheet.find(user_id)
         if cell:
             r = cell.row
-            # Update specific cells. This assumes column order matches headers.
-            # 4: Calorie_Goal, 5: Protein_Goal, ...
-            # For robustness, usually map headers to col index. 
-            # Simplified here for brevity:
-            
-            # Helper to update cell if key exists in new_data
             headers = sheet.row_values(1)
             for key, val in new_data.items():
                 if key in headers:
                     col_idx = headers.index(key) + 1
                     sheet.update_cell(r, col_idx, val)
             
-            # Update session state
             st.session_state.user.update(new_data)
             return True
     except Exception as e:
@@ -348,30 +336,12 @@ def update_user_targets_db(user_id, new_data):
         return False
 
 # -----------------------------------------------------------------------------
-# 4. UNIT CONVERSION HELPERS
-# -----------------------------------------------------------------------------
-
-def display_weight(val, system):
-    if system == 'metric': return f"{float(val):.1f} kg" if val else "0 kg"
-    # Assuming stored as metric (kg) or imperial (lbs) based on system?
-    # Actually, simpler to assume stored value matches system preference for now
-    return f"{float(val):.1f} { 'lbs' if system == 'imperial' else 'kg' }"
-
-def display_height(val, system):
-    return f"{float(val):.1f} { 'in' if system == 'imperial' else 'cm' }"
-
-# -----------------------------------------------------------------------------
 # 5. UI COMPONENTS
 # -----------------------------------------------------------------------------
 
 def render_rank_card(user):
-        # SAFE CONVERSION: Convert to integer, defaulting to 0 if empty or text
-    try:
-        pts = int(user.get('Rank_Points_Counter', 0))
-    except:
-        pts = 0
+    pts = safe_int(user.get('Rank_Points_Counter', 0))
 
-    
     if pts > 450:
         tier, next_tier, min_p, max_p, color, icon = 'Platinum', 'Max Rank', 450, 1000, 'linear-gradient(to right, #22d3ee, #2563eb)', '💠'
     elif pts > 250:
@@ -388,7 +358,8 @@ def render_rank_card(user):
         <div style="position: absolute; top: -50px; right: -50px; width: 200px; height: 200px; background: {color}; opacity: 0.15; filter: blur(60px); border-radius: 50%;"></div>
         <div style="display: flex; align-items: center; gap: 1.5rem; position: relative; z-index: 1;">
             <div style="position: relative;">
-                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed={user.get('Username', 'User')}" style="width: 80px; height: 80px; border-radius: 20px; border: 2px solid #334155; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);">
+                <!-- FIX: Added object-fit: cover to prevent squished image -->
+                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed={user.get('Username', 'User')}" style="width: 80px; height: 80px; border-radius: 20px; border: 2px solid #334155; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); object-fit: cover;">
                 <div style="position: absolute; bottom: -5px; right: -5px; background: #0f172a; padding: 2px; border-radius: 8px; border: 1px solid #1e293b; font-size: 1.2rem;">
                     {icon}
                 </div>
@@ -418,28 +389,36 @@ def render_rank_card(user):
         </div>
     </div>
     """
+    # FIX: Ensure unsafe_allow_html is True for HTML rendering
     st.markdown(html, unsafe_allow_html=True)
 
 def render_dashboard():
     user = st.session_state.user
+    
+    # FIX: Onboarding Check with Button
+    goal_check = safe_float(user.get('Calorie_Goal', 0))
+    if goal_check == 0 or goal_check == 2000:
+        st.warning("⚠️ Profile Incomplete. Your nutrition targets are set to default.")
+        if st.button("Set Nutrition Targets Now"):
+            st.session_state.active_tab = "Identity"
+            st.rerun()
+
     render_rank_card(user)
     st.write("") # Spacer
 
     logs = get_today_logs(user['User_ID'])
     
-    # Aggregations
-    totals = {k: sum(float(l.get(k, 0)) for l in logs) for k in ['Calories', 'Protein', 'Carbs', 'Saturated_Fat', 'Unsaturated_Fat', 'Fiber', 'Sugar', 'Sodium', 'Potassium', 'Iron']}
+    # Aggregations using safe_float to prevent crashes
+    totals = {k: sum(safe_float(l.get(k, 0)) for l in logs) for k in ['Calories', 'Protein', 'Carbs', 'Saturated_Fat', 'Unsaturated_Fat', 'Fiber', 'Sugar', 'Sodium', 'Potassium', 'Iron']}
     
     col1, col2 = st.columns([1, 2])
     
     with col1:
-    # SAFE GOAL CHECK: Prevents crash if sheet has text/empty values
-        try:
-            goal = float(user.get('Calorie_Goal', 2000))
-        except:
-            goal = 2000.0
+        goal = safe_float(user.get('Calorie_Goal', 2000))
+        if goal == 0: goal = 2000 # Prevent div by zero
 
-        pct = min((totals['Calories']/goal)*100, 100) if goal > 0 else 0
+        pct = min((totals['Calories']/goal)*100, 100)
+        
         st.markdown(f"""
         <div class="glass-card" style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
             <h4 style="color: #64748b; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.1em; margin-bottom: 1rem;">Energy Balance</h4>
@@ -455,7 +434,8 @@ def render_dashboard():
 
     with col2:
         st.markdown(f'<div class="glass-card">', unsafe_allow_html=True)
-        st.markdown("<h4 style='color: #64748b; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.1em; margin-bottom: 1rem;'>Micronutrient Tally</h4>", unsafe_allow_html=True)
+        # FIX: Renamed Section
+        st.markdown("<h4 style='color: #64748b; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.1em; margin-bottom: 1rem;'>Nutrient Tally</h4>", unsafe_allow_html=True)
         
         m_cols = st.columns(3)
         metrics = [
@@ -472,7 +452,9 @@ def render_dashboard():
         
         for i, (label, val, goal, unit) in enumerate(metrics):
             with m_cols[i % 3]:
-                goal_f = float(goal) if goal else 1.0
+                goal_f = safe_float(goal)
+                if goal_f == 0: goal_f = 1
+                
                 pct = min((val / goal_f) * 100, 100)
                 color = ACCENT_EMERALD if pct <= 100 else "#f43f5e"
                 st.markdown(f"""
@@ -570,12 +552,8 @@ def render_leaderboard():
         return
 
     # Filter/Sort
-    # Convert 'Rank_Points_Counter' to int safely
     for u in users:
-        try:
-            u['Rank_Points_Counter'] = int(u.get('Rank_Points_Counter', 0))
-        except:
-            u['Rank_Points_Counter'] = 0
+        u['Rank_Points_Counter'] = safe_int(u.get('Rank_Points_Counter', 0))
             
     leaderboard_data = sorted(users, key=lambda x: x['Rank_Points_Counter'], reverse=True)
     
@@ -608,7 +586,7 @@ def render_leaderboard():
         <div style="background: {bg}; border: {border}; border-radius: 1.5rem; padding: 1.5rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between;">
             <div style="display: flex; align-items: center; gap: 1rem;">
                 <span style="font-size: 1.5rem; font-weight: 900; color: #475569; width: 30px;">#{i+1}</span>
-                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed={username}" style="width: 50px; height: 50px; border-radius: 12px;">
+                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed={username}" style="width: 50px; height: 50px; border-radius: 12px; object-fit: cover;">
                 <div>
                     <h4 style="margin: 0; font-size: 1.1rem;">{username} { '(You)' if is_me else ''}</h4>
                     <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: {t_color};">{tier}</span>
@@ -651,8 +629,8 @@ def render_profile_settings():
             
             if st.button("🤖 Auto-Tune Targets"):
                 with st.spinner("Calculating optimal biometrics..."):
-                    w_kg = float(user.get('Weight', 70))
-                    h_cm = float(user.get('Height', 170))
+                    w_kg = safe_float(user.get('Weight', 70))
+                    h_cm = safe_float(user.get('Height', 170))
                     if user.get('Measurement_System') == 'imperial':
                         w_kg = w_kg * 0.453
                         h_cm = h_cm * 2.54
@@ -675,44 +653,32 @@ def render_profile_settings():
                         except:
                             st.error("AI output invalid.")
 
-    # FORM FIX: Use st.form and st.form_submit_button
-    with st.form("profile_form"):
-        st.markdown("<h4 style='font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1rem;'>Macro Composition</h4>", unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
-        
-        # We need local variables to capture inputs, then update session on submit
-        new_goals = {}
-        
-        def field(col, label, key, unit):
-            val = user.get(key, 0)
-            with col:
-                if edit_mode:
-                    new_goals[key] = st.number_input(label, value=int(val))
-                else:
-                    st.markdown(f"""
-                    <div style="background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(51, 65, 85, 0.5); border-radius: 0.75rem; padding: 1rem; display: flex; justify-content: space-between; align-items: center;">
-                        <span style="font-size: 0.7rem; font-weight: 800; color: #64748b; text-transform: uppercase;">{label}</span>
-                        <span style="font-size: 0.9rem; font-weight: 800; color: white;">{val} <span style="font-size: 0.7rem; color: #475569;">{unit}</span></span>
-                    </div>
-                    """, unsafe_allow_html=True)
+    # FIX: Form Structure Fix
+    if edit_mode:
+        with st.form("profile_form"):
+            # FIX: Renamed Section
+            st.markdown("<h4 style='font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1rem;'>Nutrient Profile</h4>", unsafe_allow_html=True)
+            c1, c2, c3 = st.columns(3)
+            
+            new_goals = {}
+            new_goals['Calorie_Goal'] = c1.number_input("Calories (kcal)", value=int(safe_float(user.get('Calorie_Goal', 2000))))
+            new_goals['Protein_Goal'] = c2.number_input("Protein (g)", value=int(safe_float(user.get('Protein_Goal', 150))))
+            new_goals['Carbs_Goal'] = c3.number_input("Carbs (g)", value=int(safe_float(user.get('Carbs_Goal', 200))))
+            
+            c4, c5 = st.columns(2)
+            new_goals['Saturated_Fat_Goal'] = c4.number_input("Sat. Fat (g)", value=int(safe_float(user.get('Saturated_Fat_Goal', 20))))
+            new_goals['Unsaturated_Fat_Goal'] = c5.number_input("Unsat. Fat (g)", value=int(safe_float(user.get('Unsaturated_Fat_Goal', 50))))
 
-        field(c1, "Calories", "Calorie_Goal", "kcal")
-        field(c2, "Protein", "Protein_Goal", "g")
-        field(c3, "Carbs", "Carbs_Goal", "g")
-        c4, c5 = st.columns(2)
-        field(c4, "Sat. Fat", "Saturated_Fat_Goal", "g")
-        field(c5, "Unsat. Fat", "Unsaturated_Fat_Goal", "g")
+            st.markdown("<br><h4 style='font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1rem;'>Micronutrient Profile</h4>", unsafe_allow_html=True)
+            m1, m2, m3 = st.columns(3)
+            new_goals['Fiber_Goal'] = m1.number_input("Fiber (g)", value=int(safe_float(user.get('Fiber_Goal', 25))))
+            new_goals['Sugar_Goal'] = m2.number_input("Sugar (g)", value=int(safe_float(user.get('Sugar_Goal', 30))))
+            new_goals['Sodium_Goal'] = m3.number_input("Sodium (mg)", value=int(safe_float(user.get('Sodium_Goal', 2000))))
+            
+            m4, m5 = st.columns(2)
+            new_goals['Potassium_Goal'] = m4.number_input("Potassium (mg)", value=int(safe_float(user.get('Potassium_Goal', 3500))))
+            new_goals['Iron_Goal'] = m5.number_input("Iron (mg)", value=int(safe_float(user.get('Iron_Goal', 15))))
 
-        st.markdown("<br><h4 style='font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1rem;'>Micronutrient Profile</h4>", unsafe_allow_html=True)
-        m1, m2, m3 = st.columns(3)
-        field(m1, "Fiber", "Fiber_Goal", "g")
-        field(m2, "Sugar", "Sugar_Goal", "g")
-        field(m3, "Sodium", "Sodium_Goal", "mg")
-        m4, m5 = st.columns(2)
-        field(m4, "Potassium", "Potassium_Goal", "mg")
-        field(m5, "Iron", "Iron_Goal", "mg")
-
-        if edit_mode:
             st.write("")
             submitted = st.form_submit_button("Commit Changes & Sync", type="primary")
             if submitted:
@@ -723,7 +689,36 @@ def render_profile_settings():
                     st.rerun()
                 else:
                     st.error("Sync Failed.")
-    
+    else:
+        # READ ONLY VIEW
+        # FIX: Renamed Section
+        st.markdown("<h4 style='font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1rem;'>Nutrient Profile</h4>", unsafe_allow_html=True)
+        c1, c2, c3 = st.columns(3)
+        def display_field(col, label, val, unit):
+             with col:
+                st.markdown(f"""
+                <div style="background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(51, 65, 85, 0.5); border-radius: 0.75rem; padding: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 0.7rem; font-weight: 800; color: #64748b; text-transform: uppercase;">{label}</span>
+                    <span style="font-size: 0.9rem; font-weight: 800; color: white;">{val} <span style="font-size: 0.7rem; color: #475569;">{unit}</span></span>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        display_field(c1, "Calories", safe_int(user.get('Calorie_Goal')), "kcal")
+        display_field(c2, "Protein", safe_int(user.get('Protein_Goal')), "g")
+        display_field(c3, "Carbs", safe_int(user.get('Carbs_Goal')), "g")
+        c4, c5 = st.columns(2)
+        display_field(c4, "Sat. Fat", safe_int(user.get('Saturated_Fat_Goal')), "g")
+        display_field(c5, "Unsat. Fat", safe_int(user.get('Unsaturated_Fat_Goal')), "g")
+
+        st.markdown("<br><h4 style='font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1rem;'>Micronutrient Profile</h4>", unsafe_allow_html=True)
+        m1, m2, m3 = st.columns(3)
+        display_field(m1, "Fiber", safe_int(user.get('Fiber_Goal')), "g")
+        display_field(m2, "Sugar", safe_int(user.get('Sugar_Goal')), "g")
+        display_field(m3, "Sodium", safe_int(user.get('Sodium_Goal')), "mg")
+        m4, m5 = st.columns(2)
+        display_field(m4, "Potassium", safe_int(user.get('Potassium_Goal')), "mg")
+        display_field(m5, "Iron", safe_int(user.get('Iron_Goal')), "mg")
+
     st.markdown("</div>", unsafe_allow_html=True)
 
 def render_login():
@@ -752,12 +747,20 @@ def render_login():
                         # 2. FIND THE MATCH
                         found_user = None
                         for user in all_users:
-                            # Check if Username and Password match
+                            # Check Username, Password
                             if str(user.get("Username")) == username and str(user.get("Password")) == password:
-                                found_user = user
-                                break
+                                # FIX: APPROVAL CHECK
+                                # Uses safe get for "Approved", defaults to "No" if column missing
+                                approved_status = str(user.get("Approved", "No")).lower()
+                                if "y" in approved_status:
+                                    found_user = user
+                                    break
+                                else:
+                                    st.error("ACCESS DENIED: Account awaiting admin approval.")
+                                    found_user = None
+                                    break # Stop searching, user found but unapproved
                         
-                        # 3. SUCCESS OR FAIL
+                        # 3. SUCCESS
                         if found_user:
                             st.success(f"Welcome back, {username}!")
                             st.session_state.authenticated = True
@@ -765,8 +768,8 @@ def render_login():
                             st.session_state.active_tab = "Dashboard"
                             time.sleep(1)
                             st.rerun()
-                        else:
-                            st.error("ACCESS DENIED: Incorrect Username or Password.")
+                        elif not any(str(u.get("Username")) == username for u in all_users):
+                             st.error("ACCESS DENIED: Incorrect Username or Password.")
                             
                     except Exception as e:
                         st.error(f"System Error: {e}")
