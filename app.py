@@ -451,44 +451,9 @@ def render_rank_card(user):
 def render_dashboard():
     user = st.session_state.user
     
-    # --- 1. CSS TO MAKE EXPANDERS LOOK LIKE GLASS CARDS ---
-    st.markdown("""
-    <style>
-    /* Style the Container (The Card) */
-    .stExpander {
-        background: rgba(30, 41, 59, 0.4);
-        border: 1px solid rgba(51, 65, 85, 0.3);
-        border-radius: 12px;
-        margin-bottom: 0.75rem;
-        overflow: hidden;
-    }
-    
-    /* Style the Header (Clickable Part) */
-    .streamlit-expanderHeader {
-        background-color: transparent !important;
-        font-family: "Source Sans Pro", sans-serif;
-        color: white !important;
-        font-size: 1rem !important;
-    }
-    
-    /* Make the content area dark/glassy */
-    .streamlit-expanderContent {
-        background: rgba(15, 23, 42, 0.3);
-        border-top: 1px solid rgba(51, 65, 85, 0.3);
-        color: white;
-    }
-    
-    /* Custom Small Buttons for Edit/Delete */
-    div[data-testid="column"] button {
-        padding: 0rem 0.5rem;
-        font-size: 0.8rem;
-        height: 2.2rem;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # --- 2. PROFILE & RANK CARD ---
-    if safe_float(user.get('Calorie_Goal', 0)) == 0:
+    # Profile Check
+    goal_check = safe_float(user.get('Calorie_Goal', 0))
+    if goal_check == 0:
         st.warning("⚠️ Profile Incomplete. Your nutrition targets are set to default.")
         if st.button("Set Nutrition Targets Now"):
             st.session_state.active_tab = "Identity"
@@ -497,37 +462,36 @@ def render_dashboard():
     render_rank_card(user)
     st.write("") 
 
-    # --- 3. GET LOGS & HANDLE UPDATES ---
     logs = get_today_logs(user['User_ID'])
     
-    # (Optional: If we just edited/deleted, we rely on session state to keep UI snappy)
-    # Note: In a full app, you would write these changes back to the Sheet here.
-    
-    # Calculate Totals from the logs
+    # --- CALCULATE TOTALS ---
     totals = {k: sum(safe_float(l.get(k, 0)) for l in logs) for k in ['Calories', 'Protein', 'Carbs', 'Saturated_Fat', 'Unsaturated_Fat', 'Fiber', 'Sugar', 'Sodium', 'Potassium', 'Iron']}
     
     col1, col2 = st.columns([1, 2])
     
-    # --- ENERGY BALANCE CARD ---
+    # --- ENERGY CARD ---
     with col1:
         goal = safe_float(user.get('Calorie_Goal', 2000)) or 2000
         pct = min((totals['Calories']/goal)*100, 100)
+        
         st.markdown(f"""
-        <div class="glass-card" style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
-            <h4 style="color: #64748b; font-size: 0.75rem; letter-spacing: 0.1em; margin-bottom: 1rem;">ENERGY</h4>
-            <div style="position: relative; width: 140px; height: 140px; border-radius: 50%; border: 10px solid #1e293b; display: flex; flex-direction: column; justify-content: center; align-items: center;">
-                <svg viewBox="0 0 36 36" style="position: absolute; width: 100%; height: 100%; transform: rotate(-90deg);">
-                    <path stroke-dasharray="{pct}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" stroke="{ACCENT_EMERALD}" stroke-width="3" fill="none" />
-                </svg>
-                <span style="font-size: 1.75rem; font-weight: 900; color: white;">{int(totals['Calories'])}</span>
-                <span style="font-size: 0.7rem; color: #64748b; font-weight: 700;">/ {int(goal)}</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+<div class="glass-card" style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
+    <h4 style="color: #64748b; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.1em; margin-bottom: 1rem;">Energy Balance</h4>
+    <div style="position: relative; width: 160px; height: 160px; border-radius: 50%; border: 12px solid #1e293b; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+        <svg viewBox="0 0 36 36" style="position: absolute; width: 100%; height: 100%; transform: rotate(-90deg);">
+            <path stroke-dasharray="{pct}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" stroke="{ACCENT_EMERALD}" stroke-width="3" fill="none" />
+        </svg>
+        <span style="font-size: 2rem; font-weight: 900; color: white;">{int(totals['Calories'])}</span>
+        <span style="font-size: 0.75rem; color: #64748b; font-weight: 700;">/ {int(goal)} kcal</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
     # --- NUTRIENT TALLY CARD ---
     with col2:
         st.markdown(f'<div class="glass-card">', unsafe_allow_html=True)
+        st.markdown("<h4 style='color: #64748b; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.1em; margin-bottom: 1rem;'>Nutrient Tally</h4>", unsafe_allow_html=True)
+        
         m_cols = st.columns(3)
         defaults = {'Protein': 150, 'Carbs': 200, 'Fiber': 30, 'Saturated_Fat': 20, 'Unsaturated_Fat': 50, 'Sugar': 30, 'Sodium': 2300, 'Potassium': 3500, 'Iron': 18}
         
@@ -538,116 +502,96 @@ def render_dashboard():
             ("Sat. Fat", totals['Saturated_Fat'], user.get('Saturated_Fat_Goal',0), 'g'),
             ("Unsat. Fat", totals['Unsaturated_Fat'], user.get('Unsaturated_Fat_Goal',0), 'g'),
             ("Sugar", totals['Sugar'], user.get('Sugar_Goal',0), 'g'),
+            ("Sodium", totals['Sodium'], user.get('Sodium_Goal',0), 'mg'),
+            ("Potassium", totals['Potassium'], user.get('Potassium_Goal',0), 'mg'),
+            ("Iron", totals['Iron'], user.get('Iron_Goal',0), 'mg'),
         ]
         
         for i, (label, val, goal, unit) in enumerate(metrics):
             with m_cols[i % 3]:
                 goal_f = safe_float(goal)
-                if goal_f == 0: key = label.replace(". ", "_"); goal_f = defaults.get(key, 100)
+                if goal_f == 0: 
+                    key = label.replace(". ", "_")
+                    goal_f = defaults.get(key, 100)
+                
                 pct = min((val / goal_f) * 100, 100)
                 color = ACCENT_EMERALD if pct <= 100 else "#f43f5e"
+                
                 st.markdown(f"""
-                <div style="margin-bottom: 0.8rem;">
-                    <div style="display: flex; justify-content: space-between; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">
-                        <span style="color: #94a3b8;">{label}</span>
-                        <span style="color: white;">{int(val)}/{int(goal_f)}</span>
-                    </div>
-                    <div style="height: 4px; width: 100%; background: #0f172a; border-radius: 99px; margin-top:2px;">
-                        <div style="height: 100%; width: {pct}%; background: {color}; border-radius: 99px;"></div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+<div style="margin-bottom: 1rem;">
+    <div style="display: flex; justify-content: space-between; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; margin-bottom: 0.25rem;">
+        <span style="color: #64748b;">{label}</span>
+        <span style="color: white;">{int(val)}/{int(goal_f)}{unit}</span>
+    </div>
+    <div style="height: 6px; width: 100%; background: #0f172a; border-radius: 99px;">
+        <div style="height: 100%; width: {pct}%; background: {color}; border-radius: 99px;"></div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.write("")
     
-    # --- 4. INTERACTIVE LOGS SECTION ---
-    st.markdown(f"""
+    # --- NEW: INTERACTIVE LOG LIST (HTML) ---
+    
+    # Note: We keep the f""" flush left to prevent Markdown from thinking it's code
+    html_list = f"""
+<div class="glass-card">
     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid {THEME_BORDER}; padding-bottom: 1rem; margin-bottom: 1rem;">
         <h3 style="margin: 0; font-size: 1.25rem;">Today's Logs</h3>
-        <span style="font-size: 0.75rem; color: #64748b;">{date.today().strftime('%B %d')}</span>
+        <span style="font-size: 0.75rem; color: #64748b;">{date.today().strftime('%B %d, %Y')}</span>
     </div>
-    """, unsafe_allow_html=True)
+    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+"""
     
     if not logs:
-        st.info("No logs yet. Add some food!")
+        html_list += """<div style="padding: 1rem; text-align: center; color: #64748b; font-style: italic;">No logs yet. Go eat something! 🍎</div>"""
+    else:
+        for log in logs:
+            name = log.get('Meal_Name', 'Unknown Meal')
+            kcal = int(safe_float(log.get('Calories', 0)))
+            prot = float(safe_float(log.get('Protein', 0)))
+            carbs = float(safe_float(log.get('Carbs', 0)))
+            sat_fat = float(safe_float(log.get('Saturated_Fat', 0)))
+            unsat_fat = float(safe_float(log.get('Unsaturated_Fat', 0)))
+            fiber = float(safe_float(log.get('Fiber', 0)))
+            sugar = float(safe_float(log.get('Sugar', 0)))
+            sodium = float(safe_float(log.get('Sodium', 0)))
+            potassium = float(safe_float(log.get('Potassium', 0)))
+            iron = float(safe_float(log.get('Iron', 0)))
+
+            html_list += f"""
+<details style="background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(51, 65, 85, 0.3); border-radius: 0.75rem; overflow: hidden; transition: all 0.2s;">
+    <summary style="padding: 1rem; cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; font-size: 0.9rem;">
+        <div style="font-weight: 700; color: white; flex: 2;">{name}</div>
+        <div style="display: flex; gap: 1.5rem; font-family: monospace; color: #cbd5e1; font-weight: 600;">
+            <span style="color: {ACCENT_EMERALD};">🔥 {kcal}</span>
+            <span>P: {prot:g}</span>
+            <span>C: {carbs:g}</span>
+            <span style="color: #94a3b8;">Sat: {sat_fat:g}</span>
+        </div>
+    </summary>
+    <div style="padding: 0 1rem 1rem 1rem; border-top: 1px solid rgba(51, 65, 85, 0.3); background: rgba(15, 23, 42, 0.6);">
+        <p style="font-size: 0.7rem; text-transform: uppercase; color: #64748b; margin: 0.75rem 0 0.5rem 0; font-weight: 800; letter-spacing: 0.05em;">Full Nutrient Profile</p>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; font-size: 0.8rem;">
+            <div><span style="color: #64748b;">Protein:</span> <span style="color: white; font-weight: bold;">{prot}g</span></div>
+            <div><span style="color: #64748b;">Carbs:</span> <span style="color: white; font-weight: bold;">{carbs}g</span></div>
+            <div><span style="color: #64748b;">Fiber:</span> <span style="color: white; font-weight: bold;">{fiber}g</span></div>
+            <div><span style="color: #64748b;">Sat. Fat:</span> <span style="color: white; font-weight: bold;">{sat_fat}g</span></div>
+            <div><span style="color: #64748b;">Unsat. Fat:</span> <span style="color: white; font-weight: bold;">{unsat_fat}g</span></div>
+            <div><span style="color: #64748b;">Sugar:</span> <span style="color: white; font-weight: bold;">{sugar}g</span></div>
+            <div><span style="color: #64748b;">Sodium:</span> <span style="color: white; font-weight: bold;">{sodium}mg</span></div>
+            <div><span style="color: #64748b;">Potassium:</span> <span style="color: white; font-weight: bold;">{potassium}mg</span></div>
+            <div><span style="color: #64748b;">Iron:</span> <span style="color: white; font-weight: bold;">{iron}mg</span></div>
+        </div>
+    </div>
+</details>
+"""
     
-    # REVERSE logs so newest is at the top
-    for i, log in enumerate(reversed(logs)):
-        # Create a unique key for each log item
-        idx = len(logs) - 1 - i
-        
-        # Header String (Simulated Preview)
-        name = log.get('Meal_Name', 'Meal')
-        cal = int(safe_float(log.get('Calories', 0)))
-        p = safe_float(log.get('Protein', 0))
-        c = safe_float(log.get('Carbs', 0))
-        f = safe_float(log.get('Saturated_Fat', 0))
-        
-        header_txt = f"**{name}** &nbsp; <span style='color:{ACCENT_EMERALD}'>🔥 {cal}</span> &nbsp; <span style='color:#cbd5e1; font-size:0.9em'>P:{p} C:{c} F:{f}</span>"
-        
-        # THE EXPANDER (Replaces HTML Card)
-        with st.expander(label=f"{name} ({cal} kcal)", expanded=False):
-            
-            # Use Session State to toggle Edit Mode per card
-            edit_key = f"edit_mode_{idx}"
-            if edit_key not in st.session_state: st.session_state[edit_key] = False
-            
-            # --- TOOLBAR (Gear & Trash) ---
-            t_col1, t_col2, t_col3 = st.columns([6, 1, 1])
-            with t_col1:
-                st.markdown(f"<h4 style='margin:0; color:{ACCENT_BLUE};'>{name}</h4>", unsafe_allow_html=True)
-            with t_col2:
-                # GEAR BUTTON
-                if st.button("⚙️", key=f"btn_edit_{idx}", help="Edit Nutrients"):
-                    st.session_state[edit_key] = not st.session_state[edit_key]
-                    st.rerun()
-            with t_col3:
-                # TRASH BUTTON (Red)
-                if st.button("🗑️", key=f"btn_del_{idx}", type="primary", help="Delete Log"):
-                    # Placeholder for deletion logic
-                    st.toast(f"Deleted {name}!", icon="🗑️")
-                    # In real app: delete_row_from_sheet(idx)
-                    st.rerun()
+    html_list += "</div></div>"
+    st.markdown(html_list, unsafe_allow_html=True)
 
-            st.write("") # Spacer
 
-            # --- CONTENT AREA ---
-            if st.session_state[edit_key]:
-                # == EDIT MODE ==
-                with st.form(key=f"form_{idx}"):
-                    st.write("📝 **Edit Nutrients**")
-                    c1, c2, c3 = st.columns(3)
-                    new_cal = c1.number_input("Calories", value=cal)
-                    new_prot = c2.number_input("Protein (g)", value=float(p))
-                    new_carbs = c3.number_input("Carbs (g)", value=float(c))
-                    
-                    c4, c5, c6 = st.columns(3)
-                    new_fat = c4.number_input("Sat. Fat (g)", value=float(f))
-                    new_sug = c5.number_input("Sugar (g)", value=float(safe_float(log.get('Sugar',0))))
-                    new_fib = c6.number_input("Fiber (g)", value=float(safe_float(log.get('Fiber',0))))
-
-                    if st.form_submit_button("💾 Save Changes", type="primary"):
-                        # UPDATE LOGIC HERE
-                        # log['Calories'] = new_cal ...
-                        st.session_state[edit_key] = False
-                        st.toast("Updated!", icon="💾")
-                        st.rerun()
-            else:
-                # == VIEW MODE (The Glass Grid) ==
-                st.markdown(f"""
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; font-size: 0.85rem; padding: 0.5rem;">
-                    <div><span style="color: #64748b;">Protein:</span> <strong style="color: white;">{p}g</strong></div>
-                    <div><span style="color: #64748b;">Carbs:</span> <strong style="color: white;">{c}g</strong></div>
-                    <div><span style="color: #64748b;">Fiber:</span> <strong style="color: white;">{safe_float(log.get('Fiber',0))}g</strong></div>
-                    <div><span style="color: #64748b;">Sat. Fat:</span> <strong style="color: white;">{f}g</strong></div>
-                    <div><span style="color: #64748b;">Unsat. Fat:</span> <strong style="color: white;">{safe_float(log.get('Unsaturated_Fat',0))}g</strong></div>
-                    <div><span style="color: #64748b;">Sugar:</span> <strong style="color: white;">{safe_float(log.get('Sugar',0))}g</strong></div>
-                    <div><span style="color: #64748b;">Sodium:</span> <strong style="color: white;">{safe_float(log.get('Sodium',0))}mg</strong></div>
-                    <div><span style="color: #64748b;">Potassium:</span> <strong style="color: white;">{safe_float(log.get('Potassium',0))}mg</strong></div>
-                    <div><span style="color: #64748b;">Iron:</span> <strong style="color: white;">{safe_float(log.get('Iron',0))}mg</strong></div>
-                </div>
-                """, unsafe_allow_html=True)
 def render_food_logger():
     # 1. CSS to Style the Container to look like a "Glass Card"
     st.markdown("""
