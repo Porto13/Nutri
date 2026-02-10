@@ -221,21 +221,6 @@ def get_gemini_response(prompt, image=None, json_mode=False):
         response = model.generate_content(parts, generation_config=config)
         return response.text
     except Exception as e:
-        # RETURN THE ACTUAL ERROR SO WE CAN SEE IT
-        return f"ERROR_DETAILS: {str(e)}"
-        
-    try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        config = genai.GenerationConfig(response_mime_type="application/json") if json_mode else None
-        
-        parts = [prompt]
-        if image:
-            parts.insert(0, image)
-            
-        response = model.generate_content(parts, generation_config=config)
-        return response.text
-    except Exception as e:
         return None
 
 # DATA HELPERS
@@ -399,7 +384,7 @@ def render_rank_card(user):
 def render_dashboard():
     user = st.session_state.user
     
-    # FIX: Only show warning if goal is explicitly 0
+    # FIX: Only show warning if goal is explicitly 0 (Profile Incomplete check)
     goal_check = safe_float(user.get('Calorie_Goal', 0))
     if goal_check == 0:
         st.warning("⚠️ Profile Incomplete. Your nutrition targets are set to default.")
@@ -418,11 +403,13 @@ def render_dashboard():
     col1, col2 = st.columns([1, 2])
     
     with col1:
+        # Default calorie goal to 2000 if 0 to avoid division by zero
         goal = safe_float(user.get('Calorie_Goal', 2000))
         if goal == 0: goal = 2000
 
         pct = min((totals['Calories']/goal)*100, 100)
         
+        # Fixed: Added unsafe_allow_html=True
         st.markdown(f"""
         <div class="glass-card" style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
             <h4 style="color: #64748b; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.1em; margin-bottom: 1rem;">Energy Balance</h4>
@@ -437,10 +424,18 @@ def render_dashboard():
         """, unsafe_allow_html=True)
 
     with col2:
+        # Fixed: Added unsafe_allow_html=True
         st.markdown(f'<div class="glass-card">', unsafe_allow_html=True)
         st.markdown("<h4 style='color: #64748b; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.1em; margin-bottom: 1rem;'>Nutrient Tally</h4>", unsafe_allow_html=True)
         
         m_cols = st.columns(3)
+        # Default values map to ensure we don't display 0/0
+        defaults = {
+            'Protein': 150, 'Carbs': 200, 'Fiber': 30,
+            'Saturated_Fat': 20, 'Unsaturated_Fat': 50, 'Sugar': 30,
+            'Sodium': 2300, 'Potassium': 3500, 'Iron': 18
+        }
+        
         metrics = [
             ("Protein", totals['Protein'], user.get('Protein_Goal',0), 'g'),
             ("Carbs", totals['Carbs'], user.get('Carbs_Goal',0), 'g'),
@@ -456,12 +451,16 @@ def render_dashboard():
         for i, (label, val, goal, unit) in enumerate(metrics):
             with m_cols[i % 3]:
                 goal_f = safe_float(goal)
-                if goal_f == 0: goal_f = 1
+                # Fix: Default to reasonable values if goal is 0
+                if goal_f == 0: 
+                    # Map "Sat. Fat" to "Saturated_Fat" key in defaults
+                    key = label.replace(". ", "_")
+                    goal_f = defaults.get(key, 100)
                 
                 pct = min((val / goal_f) * 100, 100)
                 color = ACCENT_EMERALD if pct <= 100 else "#f43f5e"
                 
-                # FIX: Add unsafe_allow_html=True to prevent raw HTML leak
+                # Fixed: Added unsafe_allow_html=True
                 st.markdown(f"""
                 <div style="margin-bottom: 1rem;">
                     <div style="display: flex; justify-content: space-between; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; margin-bottom: 0.25rem;">
@@ -473,9 +472,11 @@ def render_dashboard():
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
+        # Fixed: Added unsafe_allow_html=True
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.write("")
+    # Fixed: Added unsafe_allow_html=True
     st.markdown(f"""
     <div class="glass-card">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid {THEME_BORDER}; padding-bottom: 1rem; margin-bottom: 1rem;">
@@ -492,6 +493,7 @@ def render_dashboard():
         display_df.columns = ['Meal', 'Kcal', 'Prot (g)', 'Carbs (g)', 'Sat.Fat (g)', 'Sod (mg)']
         st.dataframe(display_df, use_container_width=True, hide_index=True)
     
+    # Fixed: Added unsafe_allow_html=True
     st.markdown("</div>", unsafe_allow_html=True)
 
 def render_food_logger():
@@ -561,6 +563,14 @@ def render_leaderboard():
         u['Rank_Points_Counter'] = safe_int(u.get('Rank_Points_Counter', 0))
             
     leaderboard_data = sorted(users, key=lambda x: x['Rank_Points_Counter'], reverse=True)
+    
+    # Update: Added Daily Quest Card
+    st.markdown("""
+    <div class="glass-card" style="margin-bottom: 2rem; border-left: 4px solid #f59e0b;">
+        <h3 style="margin: 0; font-size: 1.1rem; color: #f59e0b;">⚔️ Daily Quest: The Protein Wager</h3>
+        <p style="font-size: 0.8rem; color: #cbd5e1; margin-top: 0.5rem;">Log over 100g of protein today to unlock a 1.5x Rank Point multiplier for tomorrow's tally.</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     st.markdown(f"""
     <div style="display: flex; gap: 1rem; margin-bottom: 2rem;">
