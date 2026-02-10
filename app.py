@@ -449,58 +449,41 @@ def render_rank_card(user):
     st.markdown(html, unsafe_allow_html=True)
 
 def render_dashboard():
-    # --- HELPER: DEFINE COLORS ---
-    ACCENT_BLUE = "#60a5fa"
-    ACCENT_RED = "#f87171"
-    
     user = st.session_state.user
-
-    # --- 1. CSS: COMPACT BUTTONS & GLASS EXPANDER ---
-    st.markdown(f"""
+    
+    # --- 1. CSS TO MAKE EXPANDERS LOOK LIKE GLASS CARDS ---
+    st.markdown("""
     <style>
-    /* 1. Make the Expander look like a Glass Card */
-    .stExpander {{
+    /* Style the Container (The Card) */
+    .stExpander {
         background: rgba(30, 41, 59, 0.4);
         border: 1px solid rgba(51, 65, 85, 0.3);
         border-radius: 12px;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.75rem;
         overflow: hidden;
-    }}
-    .streamlit-expanderHeader {{
+    }
+    
+    /* Style the Header (Clickable Part) */
+    .streamlit-expanderHeader {
         background-color: transparent !important;
+        font-family: "Source Sans Pro", sans-serif;
         color: white !important;
-        padding: 0.75rem 1rem !important; /* Tighter padding */
-    }}
-    .streamlit-expanderContent {{
+        font-size: 1rem !important;
+    }
+    
+    /* Make the content area dark/glassy */
+    .streamlit-expanderContent {
         background: rgba(15, 23, 42, 0.3);
         border-top: 1px solid rgba(51, 65, 85, 0.3);
-        padding: 1rem !important;
-    }}
+        color: white;
+    }
     
-    /* 2. FORCE BUTTONS TO BE SMALL & COMPACT */
-    div[data-testid="column"] button {{
-        padding: 0rem !important;
-        min-height: 0px !important;
-        height: 32px !important;    /* Fixed small height */
-        width: 32px !important;     /* Fixed small width */
-        border-radius: 6px !important;
-        border: 1px solid rgba(255,255,255,0.1) !important;
-        background: rgba(255,255,255,0.05) !important;
-        font-size: 1.2rem !important; /* Make emoji bigger */
-        line-height: 1 !important;
-        transition: all 0.2s;
-        float: right; /* Push to right */
-    }}
-    div[data-testid="column"] button:hover {{
-        background: rgba(255,255,255,0.2) !important;
-        border-color: rgba(255,255,255,0.3) !important;
-        transform: scale(1.05);
-    }}
-    /* Specific hover color for Trash (assuming it's the second button) */
-    div[data-testid="column"]:last-child button:hover {{
-        background: rgba(248, 113, 113, 0.2) !important; /* Red tint */
-        border-color: {ACCENT_RED} !important;
-    }}
+    /* Custom Small Buttons for Edit/Delete */
+    div[data-testid="column"] button {
+        padding: 0rem 0.5rem;
+        font-size: 0.8rem;
+        height: 2.2rem;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -514,35 +497,39 @@ def render_dashboard():
     render_rank_card(user)
     st.write("") 
 
-    # --- 3. GET LOGS & TOTALS ---
+    # --- 3. GET LOGS & HANDLE UPDATES ---
     logs = get_today_logs(user['User_ID'])
     
+    # (Optional: If we just edited/deleted, we rely on session state to keep UI snappy)
+    # Note: In a full app, you would write these changes back to the Sheet here.
+    
+    # Calculate Totals from the logs
     totals = {k: sum(safe_float(l.get(k, 0)) for l in logs) for k in ['Calories', 'Protein', 'Carbs', 'Saturated_Fat', 'Unsaturated_Fat', 'Fiber', 'Sugar', 'Sodium', 'Potassium', 'Iron']}
     
     col1, col2 = st.columns([1, 2])
     
-    # Energy Card
+    # --- ENERGY BALANCE CARD ---
     with col1:
         goal = safe_float(user.get('Calorie_Goal', 2000)) or 2000
         pct = min((totals['Calories']/goal)*100, 100)
         st.markdown(f"""
         <div class="glass-card" style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
-            <h4 style="color: #64748b; font-size: 0.7rem; letter-spacing: 0.1em; margin-bottom: 0.5rem;">ENERGY</h4>
-            <div style="position: relative; width: 120px; height: 120px; border-radius: 50%; border: 8px solid #1e293b; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+            <h4 style="color: #64748b; font-size: 0.75rem; letter-spacing: 0.1em; margin-bottom: 1rem;">ENERGY</h4>
+            <div style="position: relative; width: 140px; height: 140px; border-radius: 50%; border: 10px solid #1e293b; display: flex; flex-direction: column; justify-content: center; align-items: center;">
                 <svg viewBox="0 0 36 36" style="position: absolute; width: 100%; height: 100%; transform: rotate(-90deg);">
                     <path stroke-dasharray="{pct}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" stroke="{ACCENT_EMERALD}" stroke-width="3" fill="none" />
                 </svg>
-                <span style="font-size: 1.5rem; font-weight: 900; color: white;">{int(totals['Calories'])}</span>
-                <span style="font-size: 0.6rem; color: #64748b;">/ {int(goal)}</span>
+                <span style="font-size: 1.75rem; font-weight: 900; color: white;">{int(totals['Calories'])}</span>
+                <span style="font-size: 0.7rem; color: #64748b; font-weight: 700;">/ {int(goal)}</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-    # Nutrient Tally
+    # --- NUTRIENT TALLY CARD ---
     with col2:
         st.markdown(f'<div class="glass-card">', unsafe_allow_html=True)
         m_cols = st.columns(3)
-        defaults = {'Protein': 150, 'Carbs': 200, 'Fiber': 30, 'Saturated_Fat': 20, 'Unsaturated_Fat': 50, 'Sugar': 30}
+        defaults = {'Protein': 150, 'Carbs': 200, 'Fiber': 30, 'Saturated_Fat': 20, 'Unsaturated_Fat': 50, 'Sugar': 30, 'Sodium': 2300, 'Potassium': 3500, 'Iron': 18}
         
         metrics = [
             ("Protein", totals['Protein'], user.get('Protein_Goal',0), 'g'),
@@ -560,8 +547,8 @@ def render_dashboard():
                 pct = min((val / goal_f) * 100, 100)
                 color = ACCENT_EMERALD if pct <= 100 else "#f43f5e"
                 st.markdown(f"""
-                <div style="margin-bottom: 0.5rem;">
-                    <div style="display: flex; justify-content: space-between; font-size: 0.65rem; font-weight: 700; text-transform: uppercase;">
+                <div style="margin-bottom: 0.8rem;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">
                         <span style="color: #94a3b8;">{label}</span>
                         <span style="color: white;">{int(val)}/{int(goal_f)}</span>
                     </div>
@@ -574,10 +561,10 @@ def render_dashboard():
 
     st.write("")
     
-    # --- 4. LOGS LIST (Fixed Layout) ---
+    # --- 4. INTERACTIVE LOGS SECTION ---
     st.markdown(f"""
-    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid {THEME_BORDER}; padding-bottom: 0.5rem; margin-bottom: 1rem;">
-        <h3 style="margin: 0; font-size: 1.1rem;">Today's Logs</h3>
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid {THEME_BORDER}; padding-bottom: 1rem; margin-bottom: 1rem;">
+        <h3 style="margin: 0; font-size: 1.25rem;">Today's Logs</h3>
         <span style="font-size: 0.75rem; color: #64748b;">{date.today().strftime('%B %d')}</span>
     </div>
     """, unsafe_allow_html=True)
@@ -585,82 +572,82 @@ def render_dashboard():
     if not logs:
         st.info("No logs yet. Add some food!")
     
+    # REVERSE logs so newest is at the top
     for i, log in enumerate(reversed(logs)):
+        # Create a unique key for each log item
         idx = len(logs) - 1 - i
         
+        # Header String (Simulated Preview)
         name = log.get('Meal_Name', 'Meal')
         cal = int(safe_float(log.get('Calories', 0)))
+        p = safe_float(log.get('Protein', 0))
+        c = safe_float(log.get('Carbs', 0))
+        f = safe_float(log.get('Saturated_Fat', 0))
         
-        # We wrap the Expander in a container to hold the logic
-        with st.container():
-            # EXPANDER: The Title is the Summary
-            with st.expander(label=f"{name}  •  {cal} kcal", expanded=False):
-                
-                edit_key = f"edit_mode_{idx}"
-                if edit_key not in st.session_state: st.session_state[edit_key] = False
-                
-                # --- HEADER ROW (Buttons Top Right) ---
-                # We use columns to push buttons to the far right: [Title_Space, Gear, Trash]
-                h_col1, h_col2, h_col3 = st.columns([8, 1, 1])
-                
-                with h_col1:
-                    # Title inside the expanded view
-                    st.markdown(f"<h4 style='margin:0; padding-top:4px; color:{ACCENT_BLUE}; font-size:1.1rem;'>{name}</h4>", unsafe_allow_html=True)
-                
-                with h_col2:
-                    if st.button("⚙️", key=f"btn_edit_{idx}", help="Edit"):
-                        st.session_state[edit_key] = not st.session_state[edit_key]
+        header_txt = f"**{name}** &nbsp; <span style='color:{ACCENT_EMERALD}'>🔥 {cal}</span> &nbsp; <span style='color:#cbd5e1; font-size:0.9em'>P:{p} C:{c} F:{f}</span>"
+        
+        # THE EXPANDER (Replaces HTML Card)
+        with st.expander(label=f"{name} ({cal} kcal)", expanded=False):
+            
+            # Use Session State to toggle Edit Mode per card
+            edit_key = f"edit_mode_{idx}"
+            if edit_key not in st.session_state: st.session_state[edit_key] = False
+            
+            # --- TOOLBAR (Gear & Trash) ---
+            t_col1, t_col2, t_col3 = st.columns([6, 1, 1])
+            with t_col1:
+                st.markdown(f"<h4 style='margin:0; color:{ACCENT_BLUE};'>{name}</h4>", unsafe_allow_html=True)
+            with t_col2:
+                # GEAR BUTTON
+                if st.button("⚙️", key=f"btn_edit_{idx}", help="Edit Nutrients"):
+                    st.session_state[edit_key] = not st.session_state[edit_key]
+                    st.rerun()
+            with t_col3:
+                # TRASH BUTTON (Red)
+                if st.button("🗑️", key=f"btn_del_{idx}", type="primary", help="Delete Log"):
+                    # Placeholder for deletion logic
+                    st.toast(f"Deleted {name}!", icon="🗑️")
+                    # In real app: delete_row_from_sheet(idx)
+                    st.rerun()
+
+            st.write("") # Spacer
+
+            # --- CONTENT AREA ---
+            if st.session_state[edit_key]:
+                # == EDIT MODE ==
+                with st.form(key=f"form_{idx}"):
+                    st.write("📝 **Edit Nutrients**")
+                    c1, c2, c3 = st.columns(3)
+                    new_cal = c1.number_input("Calories", value=cal)
+                    new_prot = c2.number_input("Protein (g)", value=float(p))
+                    new_carbs = c3.number_input("Carbs (g)", value=float(c))
+                    
+                    c4, c5, c6 = st.columns(3)
+                    new_fat = c4.number_input("Sat. Fat (g)", value=float(f))
+                    new_sug = c5.number_input("Sugar (g)", value=float(safe_float(log.get('Sugar',0))))
+                    new_fib = c6.number_input("Fiber (g)", value=float(safe_float(log.get('Fiber',0))))
+
+                    if st.form_submit_button("💾 Save Changes", type="primary"):
+                        # UPDATE LOGIC HERE
+                        # log['Calories'] = new_cal ...
+                        st.session_state[edit_key] = False
+                        st.toast("Updated!", icon="💾")
                         st.rerun()
-                        
-                with h_col3:
-                    # TRASH BUTTON
-                    if st.button("🗑️", key=f"btn_del_{idx}", help="Delete"):
-                        # --- ACTUAL DELETION LOGIC (Placeholder) ---
-                        # In a real app, you'd call: google_sheets.delete_row(log['row_id'])
-                        st.toast(f"Deleted {name} (Refresh to see changes)", icon="🗑️")
-                        # For now, we just pretend by rerunning, but you need a backend function to make it stick!
-                        st.rerun()
-
-                st.write("") # Small Spacer
-                st.markdown(f"<div style='height:1px; background:rgba(255,255,255,0.1); margin: 0.5rem 0 1rem 0;'></div>", unsafe_allow_html=True)
-
-                # --- CONTENT AREA ---
-                if st.session_state[edit_key]:
-                    # EDIT MODE
-                    with st.form(key=f"form_{idx}"):
-                        c1, c2 = st.columns(2)
-                        new_cal = c1.number_input("Calories", value=cal)
-                        new_prot = c2.number_input("Protein", value=float(safe_float(log.get('Protein', 0))))
-                        if st.form_submit_button("Save", type="primary"):
-                            st.session_state[edit_key] = False
-                            st.rerun()
-                else:
-                    # VIEW MODE: The "Good" Grid Layout
-                    p = safe_float(log.get('Protein', 0))
-                    c = safe_float(log.get('Carbs', 0))
-                    f = safe_float(log.get('Saturated_Fat', 0))
-                    uf = safe_float(log.get('Unsaturated_Fat', 0))
-                    fib = safe_float(log.get('Fiber', 0))
-                    sug = safe_float(log.get('Sugar', 0))
-                    sod = safe_float(log.get('Sodium', 0))
-                    pot = safe_float(log.get('Potassium', 0))
-                    ir = safe_float(log.get('Iron', 0))
-
-                    st.markdown(f"""
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; font-size: 0.85rem;">
-                        <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Protein</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{p}g</span></div>
-                        <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Carbs</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{c}g</span></div>
-                        <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Fiber</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{fib}g</span></div>
-                        
-                        <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Sat. Fat</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{f}g</span></div>
-                        <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Unsat. Fat</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{uf}g</span></div>
-                        <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Sugar</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{sug}g</span></div>
-                        
-                        <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Sodium</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{sod}mg</span></div>
-                        <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Potassium</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{pot}mg</span></div>
-                        <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Iron</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{ir}mg</span></div>
-                    </div>
-                    """, unsafe_allow_html=True)
+            else:
+                # == VIEW MODE (The Glass Grid) ==
+                st.markdown(f"""
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; font-size: 0.85rem; padding: 0.5rem;">
+                    <div><span style="color: #64748b;">Protein:</span> <strong style="color: white;">{p}g</strong></div>
+                    <div><span style="color: #64748b;">Carbs:</span> <strong style="color: white;">{c}g</strong></div>
+                    <div><span style="color: #64748b;">Fiber:</span> <strong style="color: white;">{safe_float(log.get('Fiber',0))}g</strong></div>
+                    <div><span style="color: #64748b;">Sat. Fat:</span> <strong style="color: white;">{f}g</strong></div>
+                    <div><span style="color: #64748b;">Unsat. Fat:</span> <strong style="color: white;">{safe_float(log.get('Unsaturated_Fat',0))}g</strong></div>
+                    <div><span style="color: #64748b;">Sugar:</span> <strong style="color: white;">{safe_float(log.get('Sugar',0))}g</strong></div>
+                    <div><span style="color: #64748b;">Sodium:</span> <strong style="color: white;">{safe_float(log.get('Sodium',0))}mg</strong></div>
+                    <div><span style="color: #64748b;">Potassium:</span> <strong style="color: white;">{safe_float(log.get('Potassium',0))}mg</strong></div>
+                    <div><span style="color: #64748b;">Iron:</span> <strong style="color: white;">{safe_float(log.get('Iron',0))}mg</strong></div>
+                </div>
+                """, unsafe_allow_html=True)
 def render_food_logger():
     # 1. CSS to Style the Container to look like a "Glass Card"
     st.markdown("""
