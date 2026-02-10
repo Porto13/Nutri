@@ -235,7 +235,7 @@ def get_gemini_response(prompt, image=None, json_mode=False):
         if json_mode:
             payload["generationConfig"] = {"response_mime_type": "application/json"}
 
-                response = requests.post(
+            response = requests.post(
             url, 
             headers={"Content-Type": "application/json"}, 
             json=payload, 
