@@ -536,6 +536,50 @@ def render_food_logger():
                             img_blob = img
                         except: pass
 
+                    # Prompt asking for JSON specifically
+                    prompt = f"""
+                    Analyze this food: "{description}". 
+                    Return JSON with keys: Meal_Name, Calories, Protein, Carbs, Saturated_Fat, Unsaturated_Fat, Fiber, Sugar, Sodium, Potassium, Iron.
+                    Values should be numbers (no units). Estimates.
+                    """
+                    
+                    res_text = get_gemini_response(prompt, img_blob, json_mode=True)
+                    
+                    # --- FIX STARTS HERE ---
+                    # 1. Check for API Errors immediately
+                    if res_text.startswith("ERROR"):
+                        if "NO_KEY" in res_text:
+                            st.error("Please add `GEMINI_API_KEY` to `.streamlit/secrets.toml`.")
+                        else:
+                            st.error(f"AI Connection Failed. Details: {res_text}")
+                    
+                    # 2. Try to parse JSON
+                    elif res_text:
+                        try:
+                            # Clean up markdown code blocks if the AI added them
+                            clean_res = res_text.replace("```json", "").replace("```", "").strip()
+                            data = json.loads(clean_res)
+                            
+                            # Add metadata
+                            data['Log_ID'] = str(uuid.uuid4())[:8]
+                            data['Timestamp'] = time.time()
+                            data['Date_Ref'] = datetime.now().strftime("%Y-%m-%d")
+                            
+                            log_food_to_sheet(st.session_state.user['User_ID'], data)
+                            st.success(f"Logged: {data.get('Meal_Name', 'Food')}")
+                            time.sleep(1)
+                            st.session_state.active_tab = "Dashboard"
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Failed to parse AI response.")
+                            with st.expander("See Raw Output (Debug)"):
+                                st.code(res_text)
+                    else:
+                        st.error("AI returned no response. Try again.")
+                    # --- FIX ENDS HERE ---
+                    
+        st.markdown('</div>', unsafe_allow_html=True)
+
                     prompt = f"""
                     Analyze this food: "{description}". 
                     Return JSON with keys: Meal_Name, Calories, Protein, Carbs, Saturated_Fat, Unsaturated_Fat, Fiber, Sugar, Sodium, Potassium, Iron.
