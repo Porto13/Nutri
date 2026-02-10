@@ -683,7 +683,8 @@ def render_dashboard():
                         <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Potassium</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{pot}mg</span></div>
                         <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Iron</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{ir}mg</span></div>
                     </div>
-                    """, unsafe_allow_html=True)def render_food_logger():
+                    """, unsafe_allow_html=True)
+def render_food_logger():
     # 1. CSS to Style the Container to look like a "Glass Card"
     st.markdown("""
     <style>
