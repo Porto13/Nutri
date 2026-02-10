@@ -478,17 +478,17 @@ def render_dashboard():
         pct = min((totals['Calories']/goal)*100, 100)
         
         st.markdown(f"""
-        <div class="glass-card" style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
-            <h4 style="color: #64748b; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.1em; margin-bottom: 1rem;">Energy Balance</h4>
-            <div style="position: relative; width: 160px; height: 160px; border-radius: 50%; border: 12px solid #1e293b; display: flex; flex-direction: column; justify-content: center; align-items: center;">
-                <svg viewBox="0 0 36 36" style="position: absolute; width: 100%; height: 100%; transform: rotate(-90deg);">
-                    <path stroke-dasharray="{pct}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" stroke="{ACCENT_EMERALD}" stroke-width="3" fill="none" />
-                </svg>
-                <span style="font-size: 2rem; font-weight: 900; color: white;">{int(totals['Calories'])}</span>
-                <span style="font-size: 0.75rem; color: #64748b; font-weight: 700;">/ {int(goal)} kcal</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+<div class="glass-card" style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
+    <h4 style="color: #64748b; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.1em; margin-bottom: 1rem;">Energy Balance</h4>
+    <div style="position: relative; width: 160px; height: 160px; border-radius: 50%; border: 12px solid #1e293b; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+        <svg viewBox="0 0 36 36" style="position: absolute; width: 100%; height: 100%; transform: rotate(-90deg);">
+            <path stroke-dasharray="{pct}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" stroke="{ACCENT_EMERALD}" stroke-width="3" fill="none" />
+        </svg>
+        <span style="font-size: 2rem; font-weight: 900; color: white;">{int(totals['Calories'])}</span>
+        <span style="font-size: 0.75rem; color: #64748b; font-weight: 700;">/ {int(goal)} kcal</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
     # --- NUTRIENT TALLY CARD ---
     with col2:
@@ -521,45 +521,41 @@ def render_dashboard():
                 color = ACCENT_EMERALD if pct <= 100 else "#f43f5e"
                 
                 st.markdown(f"""
-                <div style="margin-bottom: 1rem;">
-                    <div style="display: flex; justify-content: space-between; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; margin-bottom: 0.25rem;">
-                        <span style="color: #64748b;">{label}</span>
-                        <span style="color: white;">{int(val)}/{int(goal_f)}{unit}</span>
-                    </div>
-                    <div style="height: 6px; width: 100%; background: #0f172a; border-radius: 99px;">
-                        <div style="height: 100%; width: {pct}%; background: {color}; border-radius: 99px;"></div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+<div style="margin-bottom: 1rem;">
+    <div style="display: flex; justify-content: space-between; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; margin-bottom: 0.25rem;">
+        <span style="color: #64748b;">{label}</span>
+        <span style="color: white;">{int(val)}/{int(goal_f)}{unit}</span>
+    </div>
+    <div style="height: 6px; width: 100%; background: #0f172a; border-radius: 99px;">
+        <div style="height: 100%; width: {pct}%; background: {color}; border-radius: 99px;"></div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.write("")
     
     # --- NEW: INTERACTIVE LOG LIST (HTML) ---
-    # This replaces the dataframe with a custom HTML structure
     
-    # 1. Start the Card
+    # Note: We keep the f""" flush left to prevent Markdown from thinking it's code
     html_list = f"""
-    <div class="glass-card">
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid {THEME_BORDER}; padding-bottom: 1rem; margin-bottom: 1rem;">
-            <h3 style="margin: 0; font-size: 1.25rem;">Today's Logs</h3>
-            <span style="font-size: 0.75rem; color: #64748b;">{date.today().strftime('%B %d, %Y')}</span>
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-    """
+<div class="glass-card">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid {THEME_BORDER}; padding-bottom: 1rem; margin-bottom: 1rem;">
+        <h3 style="margin: 0; font-size: 1.25rem;">Today's Logs</h3>
+        <span style="font-size: 0.75rem; color: #64748b;">{date.today().strftime('%B %d, %Y')}</span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+"""
     
     if not logs:
         html_list += """<div style="padding: 1rem; text-align: center; color: #64748b; font-style: italic;">No logs yet. Go eat something! 🍎</div>"""
     else:
         for log in logs:
-            # Prepare Values
             name = log.get('Meal_Name', 'Unknown Meal')
             kcal = int(safe_float(log.get('Calories', 0)))
             prot = float(safe_float(log.get('Protein', 0)))
             carbs = float(safe_float(log.get('Carbs', 0)))
             sat_fat = float(safe_float(log.get('Saturated_Fat', 0)))
-            
-            # Additional nutrients for expanded view
             unsat_fat = float(safe_float(log.get('Unsaturated_Fat', 0)))
             fiber = float(safe_float(log.get('Fiber', 0)))
             sugar = float(safe_float(log.get('Sugar', 0)))
@@ -568,62 +564,36 @@ def render_dashboard():
             iron = float(safe_float(log.get('Iron', 0)))
 
             html_list += f"""
-            <details style="
-                background: rgba(15, 23, 42, 0.4); 
-                border: 1px solid rgba(51, 65, 85, 0.3); 
-                border-radius: 0.75rem; 
-                overflow: hidden; 
-                transition: all 0.2s;
-            ">
-                <summary style="
-                    padding: 1rem; 
-                    cursor: pointer; 
-                    list-style: none; 
-                    display: flex; 
-                    align-items: center; 
-                    justify-content: space-between;
-                    font-size: 0.9rem;
-                ">
-                    <div style="font-weight: 700; color: white; flex: 2;">{name}</div>
-                    
-                    <div style="display: flex; gap: 1.5rem; font-family: monospace; color: #cbd5e1; font-weight: 600;">
-                        <span style="color: {ACCENT_EMERALD};">🔥 {kcal}</span>
-                        <span>P: {prot:g}</span>
-                        <span>C: {carbs:g}</span>
-                        <span style="color: #94a3b8;">Sat: {sat_fat:g}</span>
-                    </div>
-                </summary>
-                
-                <div style="
-                    padding: 0 1rem 1rem 1rem; 
-                    border-top: 1px solid rgba(51, 65, 85, 0.3); 
-                    background: rgba(15, 23, 42, 0.6);
-                ">
-                    <p style="font-size: 0.7rem; text-transform: uppercase; color: #64748b; margin: 0.75rem 0 0.5rem 0; font-weight: 800; letter-spacing: 0.05em;">Full Nutrient Profile</p>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; font-size: 0.8rem;">
-                        
-                        <div><span style="color: #64748b;">Protein:</span> <span style="color: white; font-weight: bold;">{prot}g</span></div>
-                        <div><span style="color: #64748b;">Carbs:</span> <span style="color: white; font-weight: bold;">{carbs}g</span></div>
-                        <div><span style="color: #64748b;">Fiber:</span> <span style="color: white; font-weight: bold;">{fiber}g</span></div>
-                        
-                        <div><span style="color: #64748b;">Sat. Fat:</span> <span style="color: white; font-weight: bold;">{sat_fat}g</span></div>
-                        <div><span style="color: #64748b;">Unsat. Fat:</span> <span style="color: white; font-weight: bold;">{unsat_fat}g</span></div>
-                        <div><span style="color: #64748b;">Sugar:</span> <span style="color: white; font-weight: bold;">{sugar}g</span></div>
-                        
-                        <div><span style="color: #64748b;">Sodium:</span> <span style="color: white; font-weight: bold;">{sodium}mg</span></div>
-                        <div><span style="color: #64748b;">Potassium:</span> <span style="color: white; font-weight: bold;">{potassium}mg</span></div>
-                        <div><span style="color: #64748b;">Iron:</span> <span style="color: white; font-weight: bold;">{iron}mg</span></div>
-                        
-                    </div>
-                </div>
-            </details>
-            """
+<details style="background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(51, 65, 85, 0.3); border-radius: 0.75rem; overflow: hidden; transition: all 0.2s;">
+    <summary style="padding: 1rem; cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; font-size: 0.9rem;">
+        <div style="font-weight: 700; color: white; flex: 2;">{name}</div>
+        <div style="display: flex; gap: 1.5rem; font-family: monospace; color: #cbd5e1; font-weight: 600;">
+            <span style="color: {ACCENT_EMERALD};">🔥 {kcal}</span>
+            <span>P: {prot:g}</span>
+            <span>C: {carbs:g}</span>
+            <span style="color: #94a3b8;">Sat: {sat_fat:g}</span>
+        </div>
+    </summary>
+    <div style="padding: 0 1rem 1rem 1rem; border-top: 1px solid rgba(51, 65, 85, 0.3); background: rgba(15, 23, 42, 0.6);">
+        <p style="font-size: 0.7rem; text-transform: uppercase; color: #64748b; margin: 0.75rem 0 0.5rem 0; font-weight: 800; letter-spacing: 0.05em;">Full Nutrient Profile</p>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; font-size: 0.8rem;">
+            <div><span style="color: #64748b;">Protein:</span> <span style="color: white; font-weight: bold;">{prot}g</span></div>
+            <div><span style="color: #64748b;">Carbs:</span> <span style="color: white; font-weight: bold;">{carbs}g</span></div>
+            <div><span style="color: #64748b;">Fiber:</span> <span style="color: white; font-weight: bold;">{fiber}g</span></div>
+            <div><span style="color: #64748b;">Sat. Fat:</span> <span style="color: white; font-weight: bold;">{sat_fat}g</span></div>
+            <div><span style="color: #64748b;">Unsat. Fat:</span> <span style="color: white; font-weight: bold;">{unsat_fat}g</span></div>
+            <div><span style="color: #64748b;">Sugar:</span> <span style="color: white; font-weight: bold;">{sugar}g</span></div>
+            <div><span style="color: #64748b;">Sodium:</span> <span style="color: white; font-weight: bold;">{sodium}mg</span></div>
+            <div><span style="color: #64748b;">Potassium:</span> <span style="color: white; font-weight: bold;">{potassium}mg</span></div>
+            <div><span style="color: #64748b;">Iron:</span> <span style="color: white; font-weight: bold;">{iron}mg</span></div>
+        </div>
+    </div>
+</details>
+"""
     
-    # Close the Card
     html_list += "</div></div>"
-    
-    # Render HTML
     st.markdown(html_list, unsafe_allow_html=True)
+
 
 def render_food_logger():
     st.title("Add Food 🍎")
