@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 # -----------------------------------------------------------------------------
-# 1.5. HELPER FUNCTIONS (Fixes Crash Issues)
+# 1.5. HELPER FUNCTIONS
 # -----------------------------------------------------------------------------
 
 def safe_float(val, default=0.0):
@@ -37,31 +37,33 @@ def safe_int(val, default=0):
     if val is None or val == "":
         return default
     try:
-        return int(float(val)) # float cast handles "2000.0" strings
+        return int(float(val))
     except (ValueError, TypeError):
         return default
 
 # -----------------------------------------------------------------------------
 # 2. GOOGLE SHEETS CONNECTION
 # -----------------------------------------------------------------------------
-try:
-    # Load credentials from Streamlit Secrets
-    scope = ['https://www.googleapis.com/auth/spreadsheets']
-    credentials = Credentials.from_service_account_info(
-        st.secrets["gcp_service_account"],
-        scopes=scope
-    )
-    client = gspread.authorize(credentials)
-    
-    # YOUR SHEET ID
-    SHEET_ID = "1_9K1IT3zaDGNKfxwnnSIe7L881wJWVdztIwGci3B0vg"
-    
-    # Open the sheet
-    sheet = client.open_by_key(SHEET_ID).sheet1
-    # FIX: Removed the st.toast that appeared on every reload
-    
-except Exception as e:
-    st.error(f"❌ Connection Error: {e}")
+
+# CONSTANT SHEET ID (Fixed)
+SHEET_ID = "1_9K1IT3zaDGNKfxwnnSIe7L881wJWVdztIwGci3B0vg"
+
+def get_db_connection():
+    """Connect to Google Sheets."""
+    if "gcp_service_account" not in st.secrets:
+        return None
+        
+    try:
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+        client = gspread.authorize(creds)
+        return client
+    except Exception as e:
+        return None
+
+def get_main_sheet(client):
+    """Helper to get the specific worksheet by ID."""
+    return client.open_by_key(SHEET_ID).sheet1
 
 # Colors & Theme Constants
 THEME_BG = "#0f172a"
@@ -73,7 +75,7 @@ ACCENT_INDIGO = "#6366f1"
 ACCENT_AMBER = "#f59e0b"
 
 # -----------------------------------------------------------------------------
-# 3. CUSTOM CSS (Cyberpunk/Glassmorphism Re-creation)
+# 3. CUSTOM CSS
 # -----------------------------------------------------------------------------
 
 st.markdown(f"""
@@ -201,19 +203,6 @@ if 'user' not in st.session_state:
 if 'active_tab' not in st.session_state:
     st.session_state.active_tab = "Dashboard"
 
-def get_db_connection():
-    """Connect to Google Sheets."""
-    if "gcp_service_account" not in st.secrets:
-        return None
-        
-    try:
-        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
-        client = gspread.authorize(creds)
-        return client
-    except Exception as e:
-        return None
-
 def get_gemini_response(prompt, image=None, json_mode=False):
     """Call Gemini API."""
     api_key = st.secrets.get("GEMINI_API_KEY")
@@ -242,7 +231,8 @@ def fetch_all_users():
     if not client:
         return [] # Return empty list if no DB
     try:
-        sheet = client.open("NutriComp_DB").worksheet("User_Profiles")
+        # FIX: Use get_main_sheet
+        sheet = get_main_sheet(client)
         return sheet.get_all_records()
     except:
         return []
@@ -254,8 +244,8 @@ def register_user(username, password):
         return False, "Database not connected. Add GCP secrets."
         
     try:
-        sheet = client.open("NutriComp_DB").worksheet("User_Profiles")
-        # Check duplicates
+        # FIX: Use get_main_sheet
+        sheet = get_main_sheet(client)
         records = sheet.get_all_records()
         for r in records:
             if str(r.get('Username')).lower() == username.lower():
@@ -284,7 +274,15 @@ def log_food_to_sheet(user_id, entry_data):
         return
 
     try:
-        sheet = client.open("NutriComp_DB").worksheet("Food_Logs")
+        # Note: We keep Food_Logs as a separate sheet assumption, but based on prompt,
+        # we generally should stick to ID. However, Food_Logs usually is separate.
+        # If Food_Logs is in the SAME file, we can open by key and get worksheet by name.
+        # Assuming Food_Logs is Sheet 2 or named "Food_Logs".
+        # Safe approach: Open by key, then get worksheet by title "Food_Logs"
+        # If "Food_Logs" doesn't exist, we might fail. 
+        # Given "The Data Mapping" prompt earlier: "Sheet 2: Food_Logs".
+        sheet = client.open_by_key(SHEET_ID).worksheet("Food_Logs")
+        
         row = [
             entry_data['Log_ID'], entry_data['Timestamp'], entry_data['Date_Ref'], 
             user_id, entry_data['Meal_Name'], entry_data['Calories'], 
@@ -304,7 +302,7 @@ def get_today_logs(user_id):
         return [l for l in st.session_state.get('mock_logs', []) if l['Date_Ref'] == today_str]
         
     try:
-        sheet = client.open("NutriComp_DB").worksheet("Food_Logs")
+        sheet = client.open_by_key(SHEET_ID).worksheet("Food_Logs")
         records = sheet.get_all_records()
         return [r for r in records if str(r['User_ID']) == str(user_id) and r['Date_Ref'] == today_str]
     except:
@@ -318,7 +316,8 @@ def update_user_targets_db(user_id, new_data):
         return True
 
     try:
-        sheet = client.open("NutriComp_DB").worksheet("User_Profiles")
+        # FIX: Use get_main_sheet
+        sheet = get_main_sheet(client)
         # Find row by User_ID (Column 1)
         cell = sheet.find(user_id)
         if cell:
@@ -336,7 +335,7 @@ def update_user_targets_db(user_id, new_data):
         return False
 
 # -----------------------------------------------------------------------------
-# 5. UI COMPONENTS
+# 5. UI COMPONENTS (CRITICAL FIX: unsafe_allow_html=True everywhere)
 # -----------------------------------------------------------------------------
 
 def render_rank_card(user):
@@ -358,7 +357,6 @@ def render_rank_card(user):
         <div style="position: absolute; top: -50px; right: -50px; width: 200px; height: 200px; background: {color}; opacity: 0.15; filter: blur(60px); border-radius: 50%;"></div>
         <div style="display: flex; align-items: center; gap: 1.5rem; position: relative; z-index: 1;">
             <div style="position: relative;">
-                <!-- FIX: Added object-fit: cover to prevent squished image -->
                 <img src="https://api.dicebear.com/7.x/avataaars/svg?seed={user.get('Username', 'User')}" style="width: 80px; height: 80px; border-radius: 20px; border: 2px solid #334155; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); object-fit: cover;">
                 <div style="position: absolute; bottom: -5px; right: -5px; background: #0f172a; padding: 2px; border-radius: 8px; border: 1px solid #1e293b; font-size: 1.2rem;">
                     {icon}
@@ -389,13 +387,12 @@ def render_rank_card(user):
         </div>
     </div>
     """
-    # FIX: Ensure unsafe_allow_html is True for HTML rendering
     st.markdown(html, unsafe_allow_html=True)
 
 def render_dashboard():
     user = st.session_state.user
     
-    # FIX: Onboarding Check with Button
+    # Onboarding Check with Button
     goal_check = safe_float(user.get('Calorie_Goal', 0))
     if goal_check == 0 or goal_check == 2000:
         st.warning("⚠️ Profile Incomplete. Your nutrition targets are set to default.")
@@ -415,7 +412,7 @@ def render_dashboard():
     
     with col1:
         goal = safe_float(user.get('Calorie_Goal', 2000))
-        if goal == 0: goal = 2000 # Prevent div by zero
+        if goal == 0: goal = 2000
 
         pct = min((totals['Calories']/goal)*100, 100)
         
@@ -434,7 +431,6 @@ def render_dashboard():
 
     with col2:
         st.markdown(f'<div class="glass-card">', unsafe_allow_html=True)
-        # FIX: Renamed Section
         st.markdown("<h4 style='color: #64748b; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.1em; margin-bottom: 1rem;'>Nutrient Tally</h4>", unsafe_allow_html=True)
         
         m_cols = st.columns(3)
@@ -653,10 +649,9 @@ def render_profile_settings():
                         except:
                             st.error("AI output invalid.")
 
-    # FIX: Form Structure Fix
+    # Form Mode
     if edit_mode:
         with st.form("profile_form"):
-            # FIX: Renamed Section
             st.markdown("<h4 style='font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1rem;'>Nutrient Profile</h4>", unsafe_allow_html=True)
             c1, c2, c3 = st.columns(3)
             
@@ -691,7 +686,6 @@ def render_profile_settings():
                     st.error("Sync Failed.")
     else:
         # READ ONLY VIEW
-        # FIX: Renamed Section
         st.markdown("<h4 style='font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1rem;'>Nutrient Profile</h4>", unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
         def display_field(col, label, val, unit):
@@ -742,15 +736,14 @@ def render_login():
                 if username and password:
                     try:
                         # 1. GET ALL USERS FROM SHEET
-                        all_users = sheet.get_all_records()
+                        all_users = fetch_all_users()
                         
                         # 2. FIND THE MATCH
                         found_user = None
                         for user in all_users:
                             # Check Username, Password
                             if str(user.get("Username")) == username and str(user.get("Password")) == password:
-                                # FIX: APPROVAL CHECK
-                                # Uses safe get for "Approved", defaults to "No" if column missing
+                                # FIX: APPROVAL CHECK (Last Column Check Logic)
                                 approved_status = str(user.get("Approved", "No")).lower()
                                 if "y" in approved_status:
                                     found_user = user
@@ -758,7 +751,7 @@ def render_login():
                                 else:
                                     st.error("ACCESS DENIED: Account awaiting admin approval.")
                                     found_user = None
-                                    break # Stop searching, user found but unapproved
+                                    break 
                         
                         # 3. SUCCESS
                         if found_user:
