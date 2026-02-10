@@ -221,22 +221,7 @@ def get_gemini_response(prompt, image=None, json_mode=False):
         response = model.generate_content(parts, generation_config=config)
         return response.text
     except Exception as e:
-        # RETURN THE ACTUAL ERROR SO WE CAN SEE IT
         return f"ERROR_DETAILS: {str(e)}"
-        
-    try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        config = genai.GenerationConfig(response_mime_type="application/json") if json_mode else None
-        
-        parts = [prompt]
-        if image:
-            parts.insert(0, image)
-            
-        response = model.generate_content(parts, generation_config=config)
-        return response.text
-    except Exception as e:
-        return None
 
 # DATA HELPERS
 
@@ -545,22 +530,17 @@ def render_food_logger():
                     
                     res_text = get_gemini_response(prompt, img_blob, json_mode=True)
                     
-                    # --- FIX STARTS HERE ---
-                    # 1. Check for API Errors immediately
+                    # --- CHECK FOR ERRORS BEFORE PARSING ---
                     if res_text.startswith("ERROR"):
                         if "NO_KEY" in res_text:
                             st.error("Please add `GEMINI_API_KEY` to `.streamlit/secrets.toml`.")
                         else:
                             st.error(f"AI Connection Failed. Details: {res_text}")
-                    
-                    # 2. Try to parse JSON
                     elif res_text:
                         try:
-                            # Clean up markdown code blocks if the AI added them
                             clean_res = res_text.replace("```json", "").replace("```", "").strip()
                             data = json.loads(clean_res)
                             
-                            # Add metadata
                             data['Log_ID'] = str(uuid.uuid4())[:8]
                             data['Timestamp'] = time.time()
                             data['Date_Ref'] = datetime.now().strftime("%Y-%m-%d")
@@ -572,40 +552,11 @@ def render_food_logger():
                             st.rerun()
                         except Exception as e:
                             st.error(f"Failed to parse AI response.")
-                            with st.expander("See Raw Output (Debug)"):
+                            with st.expander("Debug Raw Output"):
                                 st.code(res_text)
                     else:
-                        st.error("AI returned no response. Try again.")
-                    # --- FIX ENDS HERE ---
-                    
-        st.markdown('</div>', unsafe_allow_html=True)
+                        st.error("AI returned no response.")
 
-                    prompt = f"""
-                    Analyze this food: "{description}". 
-                    Return JSON with keys: Meal_Name, Calories, Protein, Carbs, Saturated_Fat, Unsaturated_Fat, Fiber, Sugar, Sodium, Potassium, Iron.
-                    Values should be numbers (no units). Estimates.
-                    """
-                    
-                    res_text = get_gemini_response(prompt, img_blob, json_mode=True)
-                    
-                    if res_text == "ERROR_NO_KEY":
-                        st.error("Please add `GEMINI_API_KEY` to `.streamlit/secrets.toml`.")
-                    elif res_text:
-                        try:
-                            res_text = res_text.replace("```json", "").replace("```", "")
-                            data = json.loads(res_text)
-                            data['Log_ID'] = str(uuid.uuid4())[:8]
-                            data['Timestamp'] = time.time()
-                            data['Date_Ref'] = datetime.now().strftime("%Y-%m-%d")
-                            log_food_to_sheet(st.session_state.user['User_ID'], data)
-                            st.success(f"Logged: {data.get('Meal_Name', 'Food')}")
-                            time.sleep(1)
-                            st.session_state.active_tab = "Dashboard"
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Failed to parse AI response: {e}")
-                    else:
-                        st.error("AI Analysis failed. Try again.")
         st.markdown('</div>', unsafe_allow_html=True)
 
 def render_leaderboard():
@@ -715,8 +666,8 @@ def render_profile_settings():
                     Calorie_Goal, Protein_Goal, Carbs_Goal, Saturated_Fat_Goal, Unsaturated_Fat_Goal, Fiber_Goal, Sugar_Goal, Sodium_Goal, Potassium_Goal, Iron_Goal.
                     """
                     res = get_gemini_response(prompt, json_mode=True)
-                    if res == "ERROR_NO_KEY":
-                        st.error("Missing API Key.")
+                    if res.startswith("ERROR"):
+                        st.error(res)
                     elif res:
                         try:
                             clean_res = res.replace("```json", "").replace("```", "")
