@@ -208,31 +208,61 @@ if 'active_tab' not in st.session_state:
 
 def get_gemini_response(prompt, image=None, json_mode=False):
     """
-    Direct API Connection: Bypasses the buggy google-generativeai library
-    to talk directly to Google's servers via HTTP.
+    Direct API Connection with Auto-Diagnostics.
+    If the model is not found, it asks Google what models ARE available.
     """
     api_key = st.secrets.get("GEMINI_API_KEY")
     if not api_key: return "ERROR: No API Key found in secrets."
 
-    # We use the 'gemini-1.5-flash' model on the 'v1beta' endpoint manually
+    # Standard URL for Gemini 1.5 Flash
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
     
-    # 1. Prepare the Image (if present)
+    # 1. Prepare the Image
     parts = [{"text": prompt}]
     if image:
         try:
-            # Convert PIL image to Base64 bytes
             buffered = io.BytesIO()
             image.save(buffered, format="JPEG")
             img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-            parts.append({
-                "inline_data": {
-                    "mime_type": "image/jpeg",
-                    "data": img_b64
-                }
-            })
+            parts.append({"inline_data": {"mime_type": "image/jpeg", "data": img_b64}})
         except Exception as e:
             return f"IMAGE ERROR: {str(e)}"
+
+    # 2. Send Request
+    try:
+        payload = {"contents": [{"parts": parts}]}
+        if json_mode:
+            payload["generationConfig"] = {"response_mime_type": "application/json"}
+
+        response = requests.post(
+            url, 
+            headers={"Content-Type": "application/json"}, 
+            json=payload, 
+            timeout=10
+        )
+        
+        # --- THE DIAGNOSTIC SAFETY NET ---
+        if response.status_code == 404:
+            # The model wasn't found. Let's ask what DOES exist.
+            list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+            list_res = requests.get(list_url)
+            
+            if list_res.status_code == 200:
+                # Parse the list and find standard models
+                models = list_res.json().get('models', [])
+                names = [m['name'].split('/')[-1] for m in models if 'generateContent' in m.get('supportedGenerationMethods', [])]
+                return f"DIAGNOSTIC: Your Key is valid, but cannot see 'gemini-1.5-flash'. Available models: {names}"
+            else:
+                return f"CRITICAL: Key cannot even list models. (Status: {list_res.status_code})"
+        
+        if response.status_code != 200:
+            return f"API ERROR ({response.status_code}): {response.text}"
+            
+        return response.json()['candidates'][0]['content']['parts'][0]['text']
+        
+    except Exception as e:
+        return f"CONNECTION ERROR: {str(e)}"
+
 
     # 2. Construct the Payload
     payload = {
