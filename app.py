@@ -1,4 +1,7 @@
 import streamlit as st
+import requests
+import base64
+import io
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
