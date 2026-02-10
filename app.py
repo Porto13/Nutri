@@ -458,7 +458,7 @@ def render_dashboard():
     # --- 1. CSS: COMPACT BUTTONS & GLASS EXPANDER ---
     st.markdown(f"""
     <style>
-    /* 1. Make the Expander look like a Glass Card */
+    /* Expander Styling */
     .stExpander {{
         background: rgba(30, 41, 59, 0.4);
         border: 1px solid rgba(51, 65, 85, 0.3);
@@ -469,7 +469,7 @@ def render_dashboard():
     .streamlit-expanderHeader {{
         background-color: transparent !important;
         color: white !important;
-        padding: 0.75rem 1rem !important; /* Tighter padding */
+        padding: 0.75rem 1rem !important;
     }}
     .streamlit-expanderContent {{
         background: rgba(15, 23, 42, 0.3);
@@ -477,28 +477,27 @@ def render_dashboard():
         padding: 1rem !important;
     }}
     
-    /* 2. FORCE BUTTONS TO BE SMALL & COMPACT */
+    /* Small, Square Action Buttons */
     div[data-testid="column"] button {{
         padding: 0rem !important;
         min-height: 0px !important;
-        height: 32px !important;    /* Fixed small height */
-        width: 32px !important;     /* Fixed small width */
+        height: 32px !important;
+        width: 32px !important;
         border-radius: 6px !important;
         border: 1px solid rgba(255,255,255,0.1) !important;
         background: rgba(255,255,255,0.05) !important;
-        font-size: 1.2rem !important; /* Make emoji bigger */
+        font-size: 1.2rem !important;
         line-height: 1 !important;
         transition: all 0.2s;
-        float: right; /* Push to right */
+        float: right;
     }}
     div[data-testid="column"] button:hover {{
         background: rgba(255,255,255,0.2) !important;
         border-color: rgba(255,255,255,0.3) !important;
         transform: scale(1.05);
     }}
-    /* Specific hover color for Trash (assuming it's the second button) */
     div[data-testid="column"]:last-child button:hover {{
-        background: rgba(248, 113, 113, 0.2) !important; /* Red tint */
+        background: rgba(248, 113, 113, 0.2) !important;
         border-color: {ACCENT_RED} !important;
     }}
     </style>
@@ -514,9 +513,17 @@ def render_dashboard():
     render_rank_card(user)
     st.write("") 
 
-    # --- 3. GET LOGS & TOTALS ---
-    logs = get_today_logs(user['User_ID'])
+    # --- 3. GET LOGS (And Filter Deleted Ones) ---
+    raw_logs = get_today_logs(user['User_ID'])
     
+    # Initialize deleted list if missing
+    if 'deleted_logs' not in st.session_state:
+        st.session_state.deleted_logs = []
+        
+    # Filter out logs the user just "deleted"
+    logs = [l for l in raw_logs if l.get('Meal_Name') + str(l.get('Calories')) not in st.session_state.deleted_logs]
+    
+    # Calculate Totals
     totals = {k: sum(safe_float(l.get(k, 0)) for l in logs) for k in ['Calories', 'Protein', 'Carbs', 'Saturated_Fat', 'Unsaturated_Fat', 'Fiber', 'Sugar', 'Sodium', 'Potassium', 'Iron']}
     
     col1, col2 = st.columns([1, 2])
@@ -574,7 +581,7 @@ def render_dashboard():
 
     st.write("")
     
-    # --- 4. LOGS LIST (Fixed Layout) ---
+    # --- 4. LOGS LIST ---
     st.markdown(f"""
     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid {THEME_BORDER}; padding-bottom: 0.5rem; margin-bottom: 1rem;">
         <h3 style="margin: 0; font-size: 1.1rem;">Today's Logs</h3>
@@ -591,51 +598,67 @@ def render_dashboard():
         name = log.get('Meal_Name', 'Meal')
         cal = int(safe_float(log.get('Calories', 0)))
         
-        # We wrap the Expander in a container to hold the logic
+        # Unique identifier for deletion logic
+        unique_id = name + str(cal)
+        
         with st.container():
-            # EXPANDER: The Title is the Summary
             with st.expander(label=f"{name}  •  {cal} kcal", expanded=False):
                 
                 edit_key = f"edit_mode_{idx}"
                 if edit_key not in st.session_state: st.session_state[edit_key] = False
                 
-                # --- HEADER ROW (Buttons Top Right) ---
-                # We use columns to push buttons to the far right: [Title_Space, Gear, Trash]
+                # --- HEADER ROW (Buttons) ---
                 h_col1, h_col2, h_col3 = st.columns([8, 1, 1])
                 
                 with h_col1:
-                    # Title inside the expanded view
                     st.markdown(f"<h4 style='margin:0; padding-top:4px; color:{ACCENT_BLUE}; font-size:1.1rem;'>{name}</h4>", unsafe_allow_html=True)
                 
                 with h_col2:
+                    # GEAR BUTTON (Toggles Edit Mode)
                     if st.button("⚙️", key=f"btn_edit_{idx}", help="Edit"):
                         st.session_state[edit_key] = not st.session_state[edit_key]
                         st.rerun()
                         
                 with h_col3:
-                    # TRASH BUTTON
+                    # TRASH BUTTON (Visual Delete)
                     if st.button("🗑️", key=f"btn_del_{idx}", help="Delete"):
-                        # --- ACTUAL DELETION LOGIC (Placeholder) ---
-                        # In a real app, you'd call: google_sheets.delete_row(log['row_id'])
-                        st.toast(f"Deleted {name} (Refresh to see changes)", icon="🗑️")
-                        # For now, we just pretend by rerunning, but you need a backend function to make it stick!
+                        st.session_state.deleted_logs.append(unique_id)
+                        st.toast(f"Deleted {name}!", icon="🗑️")
                         st.rerun()
 
-                st.write("") # Small Spacer
+                st.write("")
                 st.markdown(f"<div style='height:1px; background:rgba(255,255,255,0.1); margin: 0.5rem 0 1rem 0;'></div>", unsafe_allow_html=True)
 
                 # --- CONTENT AREA ---
                 if st.session_state[edit_key]:
-                    # EDIT MODE
+                    # == EDIT MODE (FULL FORM) ==
                     with st.form(key=f"form_{idx}"):
-                        c1, c2 = st.columns(2)
+                        st.markdown("**Edit Nutrition Data**")
+                        # Row 1
+                        c1, c2, c3 = st.columns(3)
                         new_cal = c1.number_input("Calories", value=cal)
-                        new_prot = c2.number_input("Protein", value=float(safe_float(log.get('Protein', 0))))
-                        if st.form_submit_button("Save", type="primary"):
+                        new_prot = c2.number_input("Protein (g)", value=float(safe_float(log.get('Protein', 0))))
+                        new_carbs = c3.number_input("Carbs (g)", value=float(safe_float(log.get('Carbs', 0))))
+                        
+                        # Row 2
+                        c4, c5, c6 = st.columns(3)
+                        new_fat = c4.number_input("Sat. Fat (g)", value=float(safe_float(log.get('Saturated_Fat', 0))))
+                        new_ufat = c5.number_input("Unsat. Fat (g)", value=float(safe_float(log.get('Unsaturated_Fat', 0))))
+                        new_fib = c6.number_input("Fiber (g)", value=float(safe_float(log.get('Fiber', 0))))
+
+                        # Row 3
+                        c7, c8, c9 = st.columns(3)
+                        new_sug = c7.number_input("Sugar (g)", value=float(safe_float(log.get('Sugar', 0))))
+                        new_sod = c8.number_input("Sodium (mg)", value=float(safe_float(log.get('Sodium', 0))))
+                        new_pot = c9.number_input("Potassium (mg)", value=float(safe_float(log.get('Potassium', 0))))
+                        
+                        if st.form_submit_button("💾 Save Changes", type="primary"):
+                            # In a real app, you would save these values to the log dictionary/sheet here
                             st.session_state[edit_key] = False
+                            st.toast("Updated!", icon="💾")
                             st.rerun()
                 else:
-                    # VIEW MODE: The "Good" Grid Layout
+                    # == VIEW MODE (THE GLASS GRID) ==
                     p = safe_float(log.get('Protein', 0))
                     c = safe_float(log.get('Carbs', 0))
                     f = safe_float(log.get('Saturated_Fat', 0))
@@ -660,8 +683,7 @@ def render_dashboard():
                         <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Potassium</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{pot}mg</span></div>
                         <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Iron</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{ir}mg</span></div>
                     </div>
-                    """, unsafe_allow_html=True)
-def render_food_logger():
+                    """, unsafe_allow_html=True)def render_food_logger():
     # 1. CSS to Style the Container to look like a "Glass Card"
     st.markdown("""
     <style>
