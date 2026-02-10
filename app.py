@@ -262,153 +262,24 @@ def get_gemini_response(prompt, image=None, json_mode=False):
     return "SERVER BUSY: Google is overloaded right now. Please try again in a minute."
 
 
-    # 2. Construct the Payload
-    payload = {
-        "contents": [{"parts": parts}]
-    }
-    
-    # 3. Handle JSON Mode
-    if json_mode:
-        payload["generationConfig"] = {"response_mime_type": "application/json"}
+    # ... [Keep get_gemini_response as is] ...
 
-    # 4. Send Request
-    try:
-        response = requests.post(
-            url, 
-            headers={"Content-Type": "application/json"}, 
-            json=payload,
-            timeout=10
-        )
-        
-        # Check for errors (404, 403, 500, etc)
-        if response.status_code != 200:
-            return f"API ERROR ({response.status_code}): {response.text}"
-            
-        return response.json()['candidates'][0]['content']['parts'][0]['text']
-        
-    except Exception as e:
-        return f"CONNECTION ERROR: {str(e)}"
+    return "SERVER BUSY: Google is overloaded right now. Please try again in a minute."
 
-
-# DATA HELPERS
-
+# --- DATA HELPERS ---
 def fetch_all_users():
-    """Fetch all users for leaderboard."""
-    client = get_db_connection()
-    if not client:
-        return [] # Return empty list if no DB
-    try:
-        sheet = get_main_sheet(client)
-        return sheet.get_all_records()
-    except:
-        return []
+    # ... [Keep this function as is] ...
 
-def register_user(username, password):
-    """Register new user."""
-    client = get_db_connection()
-    if not client:
-        return False, "Database not connected. Add GCP secrets."
-        
-    try:
-        sheet = get_main_sheet(client)
-        records = sheet.get_all_records()
-        for r in records:
-            if str(r.get('Username')).lower() == username.lower():
-                return False, "Username taken."
-        
-        # Create new row
-        new_id = f"u_{str(uuid.uuid4())[:6]}"
-        # Headers: User_ID, Username, Password, Calorie_Goal, ... (Defaults)
-        row = [
-            new_id, username, password, 
-            2000, 150, 200, 20, 50, 25, 30, 2000, 3000, 15, # Default Macros
-            "Bronze", 1.0, 0, 0, 0, # Rank Data
-            25, "Male", 70, 175, 1.2, "Maintain", "metric", # Demographics
-            "No" # Approval Status
-        ]
-        sheet.append_row(row)
-        return True, "Registration successful! Account pending admin approval."
-    except Exception as e:
-        return False, f"Error: {str(e)}"
-
-def log_food_to_sheet(user_id, entry_data):
-    client = get_db_connection()
-    if not client:
-        if 'mock_logs' not in st.session_state: st.session_state.mock_logs = []
-        st.session_state.mock_logs.append(entry_data)
-        return
-
-    try:
-        # Assuming Food_Logs is a separate sheet/tab. 
-        # Safe approach: Open by key, then get worksheet by title "Food_Logs"
-        sheet = client.open_by_key(SHEET_ID).worksheet("Food_Logs")
-        
-        row = [
-            entry_data['Log_ID'], entry_data['Timestamp'], entry_data['Date_Ref'], 
-            user_id, entry_data['Meal_Name'], entry_data['Calories'], 
-            entry_data['Protein'], entry_data['Carbs'], entry_data['Saturated_Fat'],
-            entry_data['Unsaturated_Fat'], entry_data['Fiber'], entry_data['Sugar'],
-            entry_data['Sodium'], entry_data['Potassium'], entry_data['Iron']
-        ]
-        sheet.append_row(row)
-    except Exception as e:
-        st.error(f"Log Error: {e}")
-
-def get_today_logs(user_id):
-    client = get_db_connection()
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    
-    if not client:
-        return [l for l in st.session_state.get('mock_logs', []) if l['Date_Ref'] == today_str]
-        
-    try:
-        sheet = client.open_by_key(SHEET_ID).worksheet("Food_Logs")
-        records = sheet.get_all_records()
-        return [r for r in records if str(r['User_ID']) == str(user_id) and r['Date_Ref'] == today_str]
-    except:
-        return []
-
-def update_user_targets_db(user_id, new_data):
-    """Updates user profile using the Submit Button in Identity Tab."""
-    client = get_db_connection()
-    if not client:
-        st.session_state.user.update(new_data)
-        return True
-
-    try:
-        sheet = get_main_sheet(client)
-        # Find row by User_ID (Column 1)
-        cell = sheet.find(user_id)
-        if cell:
-            r = cell.row
-            headers = sheet.row_values(1)
-            for key, val in new_data.items():
-                if key in headers:
-                    col_idx = headers.index(key) + 1
-                    sheet.update_cell(r, col_idx, val)
-            
-            st.session_state.user.update(new_data)
-            return True
-    except Exception as e:
-        st.error(f"Sync Error: {e}")
-        return False
-
-# -----------------------------------------------------------------------------
-# 5. UI COMPONENTS
-# -----------------------------------------------------------------------------
-
+# --- UI COMPONENTS ---
 def render_rank_card(user):
-    # 1. Calculate Logic
     xp = safe_float(user.get('XP', 0))
     level = int(xp // 1000) + 1
     current_level_xp = xp - ((level - 1) * 1000)
     progress_pct = min((current_level_xp / 1000) * 100, 100)
-    
     tier = user.get('Tier', 'Bronze')
     streak = user.get('Streak', 0)
     name = user.get('Name', 'User')
 
-    # 2. HTML String (FLUSH LEFT TO PREVENTS ERRORS)
     html_content = f"""
 <style>
     .rank-card {{
@@ -444,11 +315,10 @@ def render_rank_card(user):
         <div>
             <h2 style="margin: 0; font-size: 1.5rem; color: white;">{name}</h2>
             <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.25rem;">
-                <span style="background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 2px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;">
+                <span style="background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 2px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">
                     {tier} Tier
                 </span>
-                <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 600;">•</span>
-                <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 600;">Lvl {level}</span>
+                <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 600;">• Lvl {level}</span>
             </div>
         </div>
         <div style="text-align: right;">
@@ -456,10 +326,16 @@ def render_rank_card(user):
             <div style="font-size: 0.65rem; color: #64748b; text-transform: uppercase; font-weight: 700;">Day Streak</div>
         </div>
     </div>
-
     <div class="progress-track">
         <div class="progress-fill"></div>
     </div>
+    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #94a3b8; font-weight: 600;">
+        <span>{int(current_level_xp)} XP</span>
+        <span>{int(1000 - current_level_xp)} XP to Level {level + 1}</span>
+    </div>
+</div>
+"""
+    st.markdown(html_content, unsafe_allow_html=True)
 
 def render_dashboard():
     # --- HELPER: DEFINE COLORS ---
