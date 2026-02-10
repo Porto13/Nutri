@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
-from google import genai  # <--- THIS IS THE NEW LIBRARY
+from google import genai
 import json
 import uuid
 import time
@@ -43,29 +43,44 @@ def get_main_sheet(client):
     return client.open_by_key(SHEET_ID).sheet1
 
 def get_gemini_response(prompt, image=None, json_mode=False):
-    """Call Gemini API using the NEW google-genai SDK."""
+    """
+    Robust AI Call: Tries multiple models and reports availability if all fail.
+    """
     api_key = st.secrets.get("GEMINI_API_KEY")
     if not api_key: return "ERROR_NO_KEY"
     
-    try:
-        # Initialize the new Client
-        client = genai.Client(api_key=api_key)
-        
-        contents = [prompt]
-        if image:
-            contents.append(image)
-            
-        config = {'response_mime_type': 'application/json'} if json_mode else None
+    client = genai.Client(api_key=api_key)
+    
+    contents = [prompt]
+    if image: contents.append(image)
+    
+    config = {'response_mime_type': 'application/json'} if json_mode else None
 
-        # The New Syntax
-        response = client.models.generate_content(
-            model='gemini-1.5-flash',
-            contents=contents,
-            config=config
-        )
-        return response.text
+    # LIST OF MODELS TO TRY (In order of preference)
+    models_to_try = ['gemini-1.5-flash', 'gemini-1.5-flash-001', 'gemini-pro', 'gemini-1.0-pro']
+    
+    last_error = ""
+
+    for model_name in models_to_try:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=contents,
+                config=config
+            )
+            return response.text  # If successful, return immediately
+        except Exception as e:
+            last_error = str(e)
+            continue # Try the next model
+
+    # IF WE GET HERE, ALL MODELS FAILED. RUN DIAGNOSTICS.
+    try:
+        # Ask Google what IS available
+        all_models = list(client.models.list())
+        available_names = [m.name for m in all_models if "generateContent" in (m.supported_generation_methods or [])]
+        return f"ERROR: All models failed. Your key allows access to: {available_names}. Last Error: {last_error}"
     except Exception as e:
-        return f"ERROR_DETAILS: {str(e)}"
+        return f"ERROR: Critical API Failure. Last Error: {last_error}"
 
 # -----------------------------------------------------------------------------
 # 4. STYLING
@@ -333,7 +348,7 @@ def render_leaderboard():
         border = f"1px solid {ACCENT_INDIGO}" if is_me else "none"
         
         st.markdown(f"""
-        <div style="background: {bg}; border: {border}; border-radius: 1rem; padding: 1rem; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: space-between;">
+        <div style="background: {bg}; border: {border}; border-radius: 1.5rem; padding: 1.5rem; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: space-between;">
             <div style="display: flex; align-items: center; gap: 1rem;">
                 <span style="font-size: 1.2rem; font-weight: 900; color: #64748b;">#{i+1}</span>
                 <img src="https://api.dicebear.com/7.x/avataaars/svg?seed={p.get('Username')}" style="width: 40px; height: 40px; border-radius: 50%;">
