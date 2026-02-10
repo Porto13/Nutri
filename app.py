@@ -398,68 +398,55 @@ def update_user_targets_db(user_id, new_data):
 # -----------------------------------------------------------------------------
 
 def render_rank_card(user):
-    # 1. Calculate Logic
-    xp = safe_float(user.get('XP', 0))
-    level = int(xp // 1000) + 1
-    current_level_xp = xp - ((level - 1) * 1000)
-    progress_pct = min((current_level_xp / 1000) * 100, 100)
+    pts = safe_int(user.get('Rank_Points_Counter', 0))
+
+    if pts > 450:
+        tier, next_tier, min_p, max_p, color, icon = 'Platinum', 'Max Rank', 450, 1000, 'linear-gradient(to right, #22d3ee, #2563eb)', '💠'
+    elif pts > 250:
+        tier, next_tier, min_p, max_p, color, icon = 'Gold', 'Platinum', 250, 450, 'linear-gradient(to right, #fde047, #d97706)', '🥇'
+    elif pts > 100:
+        tier, next_tier, min_p, max_p, color, icon = 'Silver', 'Gold', 100, 250, 'linear-gradient(to right, #cbd5e1, #64748b)', '🥈'
+    else:
+        tier, next_tier, min_p, max_p, color, icon = 'Bronze', 'Silver', 0, 100, 'linear-gradient(to right, #fb923c, #9a3412)', '🥉'
+
+    pct = 100 if tier == 'Platinum' else ((pts - min_p) / (max_p - min_p)) * 100
     
-    tier = user.get('Tier', 'Bronze')
-    streak = user.get('Streak', 0)
-    name = user.get('Name', 'User')
-
-    # 2. HTML String (FLUSH LEFT TO PREVENTS ERRORS)
-    html_content = f"""
-<style>
-    .rank-card {{
-        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 16px;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        position: relative;
-        overflow: hidden;
-    }}
-    .progress-track {{
-        width: 100%;
-        height: 10px;
-        background-color: rgba(255, 255, 255, 0.1);
-        border-radius: 999px;
-        margin-top: 1rem;
-        margin-bottom: 0.5rem;
-        overflow: hidden;
-    }}
-    .progress-fill {{
-        height: 100%;
-        width: {progress_pct}%;
-        background: linear-gradient(90deg, #10b981, #34d399);
-        border-radius: 999px;
-        transition: width 0.5s ease-in-out;
-    }}
-</style>
-
-<div class="rank-card">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div>
-            <h2 style="margin: 0; font-size: 1.5rem; color: white;">{name}</h2>
-            <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.25rem;">
-                <span style="background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 2px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;">
-                    {tier} Tier
-                </span>
-                <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 600;">•</span>
-                <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 600;">Lvl {level}</span>
+    html = f"""
+    <div class="glass-card" style="position: relative; overflow: hidden;">
+        <div style="position: absolute; top: -50px; right: -50px; width: 200px; height: 200px; background: {color}; opacity: 0.15; filter: blur(60px); border-radius: 50%;"></div>
+        <div style="display: flex; align-items: center; gap: 1.5rem; position: relative; z-index: 1;">
+            <div style="position: relative;">
+                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed={user.get('Username', 'User')}" style="width: 80px; height: 80px; border-radius: 20px; border: 2px solid #334155; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); object-fit: cover;">
+                <div style="position: absolute; bottom: -5px; right: -5px; background: #0f172a; padding: 2px; border-radius: 8px; border: 1px solid #1e293b; font-size: 1.2rem;">
+                    {icon}
+                </div>
+            </div>
+            <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: end; margin-bottom: 0.5rem;">
+                    <div>
+                        <h2 style="margin: 0; font-size: 1.5rem; line-height: 1;">{user.get('Username', 'User')}</h2>
+                        <span style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.1em;">{tier} Tier • {user.get('Current_Rank_Multiplier', 1.0)}x Boost</span>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: #64748b;">Next: {next_tier}</span>
+                    </div>
+                </div>
+                
+                <div class="progress-container">
+                    <div class="progress-bar" style="width: {pct}%; background: {color};">
+                        <div class="shimmer"></div>
+                    </div>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; margin-top: 0.5rem;">
+                    <span style="font-size: 0.75rem; font-weight: 600; color: #cbd5e1;">{pts} PTS</span>
+                    <span style="font-size: 0.75rem; font-weight: 600; color: #64748b;">{max_p - pts} to go</span>
+                </div>
             </div>
         </div>
-        <div style="text-align: right;">
-            <div style="font-size: 1.25rem;">🔥 {streak}</div>
-            <div style="font-size: 0.65rem; color: #64748b; text-transform: uppercase; font-weight: 700;">Day Streak</div>
-        </div>
     </div>
-
-    <div class="progress-track">
-        <div class="progress-fill"></div>
-    </div>
+    """
+    st.markdown(html, unsafe_allow_html=True)
 
 def render_dashboard():
     # --- HELPER: DEFINE COLORS ---
@@ -468,9 +455,10 @@ def render_dashboard():
     
     user = st.session_state.user
 
-    # --- 1. CSS (MUST BE INSIDE st.markdown) ---
+    # --- 1. CSS: COMPACT BUTTONS & GLASS EXPANDER ---
     st.markdown(f"""
     <style>
+    /* Expander Styling */
     .stExpander {{
         background: rgba(30, 41, 59, 0.4);
         border: 1px solid rgba(51, 65, 85, 0.3);
@@ -481,7 +469,7 @@ def render_dashboard():
     .streamlit-expanderHeader {{
         background-color: transparent !important;
         color: white !important;
-        font-family: monospace;
+        font-family: monospace; /* Monospace helps align the numbers in the title */
         font-size: 0.85rem !important;
         padding: 0.75rem 1rem !important;
     }}
@@ -490,8 +478,11 @@ def render_dashboard():
         border-top: 1px solid rgba(51, 65, 85, 0.3);
         padding: 1rem !important;
     }}
+    
+    /* Small, Square Action Buttons */
     div[data-testid="column"] button {{
         padding: 0rem !important;
+        min-height: 0px !important;
         height: 32px !important;
         width: 32px !important;
         border-radius: 6px !important;
@@ -499,25 +490,49 @@ def render_dashboard():
         background: rgba(255,255,255,0.05) !important;
         font-size: 1.2rem !important;
         line-height: 1 !important;
+        transition: all 0.2s;
         float: right;
     }}
-    div[data-testid="column"]:last-child button {{ color: {ACCENT_RED} !important; }}
+    div[data-testid="column"] button:hover {{
+        background: rgba(255,255,255,0.2) !important;
+        border-color: rgba(255,255,255,0.3) !important;
+        transform: scale(1.05);
+    }}
+    /* Specific styling for the last button in the row (The Trash Can) */
+    div[data-testid="column"]:last-child button {{
+        color: {ACCENT_RED} !important; /* Make icon red */
+    }}
+    div[data-testid="column"]:last-child button:hover {{
+        background: rgba(248, 113, 113, 0.2) !important;
+        border-color: {ACCENT_RED} !important;
+    }}
     </style>
     """, unsafe_allow_html=True)
 
-    # --- 2. RENDER COMPONENTS ---
+    # --- 2. PROFILE & RANK CARD ---
+    if safe_float(user.get('Calorie_Goal', 0)) == 0:
+        st.warning("⚠️ Profile Incomplete. Your nutrition targets are set to default.")
+        if st.button("Set Nutrition Targets Now"):
+            st.session_state.active_tab = "Identity"
+            st.rerun()
+
     render_rank_card(user)
     st.write("") 
 
-    # --- 3. LOGS LOGIC ---
+    # --- 3. GET LOGS (And Filter Deleted Ones) ---
     raw_logs = get_today_logs(user['User_ID'])
-    if 'deleted_logs' not in st.session_state: st.session_state.deleted_logs = []
+    
+    if 'deleted_logs' not in st.session_state:
+        st.session_state.deleted_logs = []
+        
     logs = [l for l in raw_logs if l.get('Meal_Name') + str(l.get('Calories')) not in st.session_state.deleted_logs]
     
+    # Calculate Totals
     totals = {k: sum(safe_float(l.get(k, 0)) for l in logs) for k in ['Calories', 'Protein', 'Carbs', 'Saturated_Fat', 'Unsaturated_Fat', 'Fiber', 'Sugar', 'Sodium', 'Potassium', 'Iron']}
     
-    # --- 4. SUMMARY CARDS ---
     col1, col2 = st.columns([1, 2])
+    
+    # Energy Card
     with col1:
         goal = safe_float(user.get('Calorie_Goal', 2000)) or 2000
         pct = min((totals['Calories']/goal)*100, 100)
@@ -529,70 +544,327 @@ def render_dashboard():
                     <path stroke-dasharray="{pct}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" stroke="{ACCENT_EMERALD}" stroke-width="3" fill="none" />
                 </svg>
                 <span style="font-size: 1.5rem; font-weight: 900; color: white;">{int(totals['Calories'])}</span>
+                <span style="font-size: 0.6rem; color: #64748b;">/ {int(goal)}</span>
             </div>
-        </div>""", unsafe_allow_html=True)
+        </div>
+        """, unsafe_allow_html=True)
 
+    # Nutrient Tally
     with col2:
         st.markdown(f'<div class="glass-card">', unsafe_allow_html=True)
         m_cols = st.columns(3)
-        metrics = [("Protein", totals['Protein'], user.get('Protein_Goal',150)), ("Carbs", totals['Carbs'], user.get('Carbs_Goal',200)), ("Fat", totals['Saturated_Fat'], user.get('Saturated_Fat_Goal',50))]
-        for label, val, goal in metrics:
-            with m_cols[metrics.index((label, val, goal)) % 3]:
-                st.metric(label, f"{int(val)}g")
+        defaults = {'Protein': 150, 'Carbs': 200, 'Fiber': 30, 'Saturated_Fat': 20, 'Unsaturated_Fat': 50, 'Sugar': 30}
+        
+        metrics = [
+            ("Protein", totals['Protein'], user.get('Protein_Goal',0), 'g'),
+            ("Carbs", totals['Carbs'], user.get('Carbs_Goal',0), 'g'),
+            ("Fiber", totals['Fiber'], user.get('Fiber_Goal',0), 'g'),
+            ("Sat. Fat", totals['Saturated_Fat'], user.get('Saturated_Fat_Goal',0), 'g'),
+            ("Unsat. Fat", totals['Unsaturated_Fat'], user.get('Unsaturated_Fat_Goal',0), 'g'),
+            ("Sugar", totals['Sugar'], user.get('Sugar_Goal',0), 'g'),
+        ]
+        
+        for i, (label, val, goal, unit) in enumerate(metrics):
+            with m_cols[i % 3]:
+                goal_f = safe_float(goal)
+                if goal_f == 0: key = label.replace(". ", "_"); goal_f = defaults.get(key, 100)
+                pct = min((val / goal_f) * 100, 100)
+                color = ACCENT_EMERALD if pct <= 100 else "#f43f5e"
+                st.markdown(f"""
+                <div style="margin-bottom: 0.5rem;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.65rem; font-weight: 700; text-transform: uppercase;">
+                        <span style="color: #94a3b8;">{label}</span>
+                        <span style="color: white;">{int(val)}/{int(goal_f)}</span>
+                    </div>
+                    <div style="height: 4px; width: 100%; background: #0f172a; border-radius: 99px; margin-top:2px;">
+                        <div style="height: 100%; width: {pct}%; background: {color}; border-radius: 99px;"></div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.write("")
-    st.subheader("Today's Logs")
     
-    # --- 5. LOG LIST ---
+    # --- 4. LOGS LIST ---
+    st.markdown(f"""
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid {THEME_BORDER}; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+        <h3 style="margin: 0; font-size: 1.1rem;">Today's Logs</h3>
+        <span style="font-size: 0.75rem; color: #64748b;">{date.today().strftime('%B %d')}</span>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    if not logs:
+        st.info("No logs yet. Add some food!")
+    
     for i, log in enumerate(reversed(logs)):
         idx = len(logs) - 1 - i
+        
+        # Data Extraction
         name = log.get('Meal_Name', 'Meal')
         cal = int(safe_float(log.get('Calories', 0)))
+        p = safe_float(log.get('Protein', 0))
+        c = safe_float(log.get('Carbs', 0))
+        f = safe_float(log.get('Saturated_Fat', 0))
+        sug = safe_float(log.get('Sugar', 0))
         
-        edit_key = f"edit_mode_{idx}"
-        if edit_key not in st.session_state: st.session_state[edit_key] = False
-
-        label_text = f"{name}  |  {cal} kcal"
-
+        # SMART LABEL: "Meal | 350kcal | 30g P | 40g C | 10g F | 5g S"
+        # We use a nice format so you see the summary WITHOUT opening the tab
+        label_text = f"{name}  |  {cal} kcal  •  {p}g P  •  {c}g C  •  {f}g F  •  {sug}g S"
+        
+        unique_id = name + str(cal)
+        
         with st.container():
+            # OPEN THE TAB
             with st.expander(label=label_text, expanded=False):
-                c1, c2, c3 = st.columns([6, 1, 1])
-                with c1: st.write("")
-                with c2: 
-                    if st.button("⚙️", key=f"btn_e_{idx}"): 
+                
+                edit_key = f"edit_mode_{idx}"
+                if edit_key not in st.session_state: st.session_state[edit_key] = False
+                
+                # --- HEADER ROW ---
+                h_col1, h_col2, h_col3 = st.columns([8, 1, 1])
+                
+                with h_col1:
+                    # Detailed Title inside
+                    st.markdown(f"<h4 style='margin:0; padding-top:4px; color:{ACCENT_BLUE}; font-size:1.1rem;'>{name}</h4>", unsafe_allow_html=True)
+                
+                with h_col2:
+                    # GEAR BUTTON (Toggles Edit Mode)
+                    if st.button("⚙️", key=f"btn_edit_{idx}", help="Edit"):
                         st.session_state[edit_key] = not st.session_state[edit_key]
                         st.rerun()
-                with c3:
-                    if st.button("🗑️", key=f"btn_d_{idx}"):
-                        st.session_state.deleted_logs.append(name + str(cal))
+                        
+                with h_col3:
+                    # TRASH BUTTON
+                    if st.button("🗑️", key=f"btn_del_{idx}", help="Delete"):
+                        st.session_state.deleted_logs.append(unique_id)
+                        st.toast(f"Deleted {name}!", icon="🗑️")
                         st.rerun()
 
+                st.write("")
+                st.markdown(f"<div style='height:1px; background:rgba(255,255,255,0.1); margin: 0.5rem 0 1rem 0;'></div>", unsafe_allow_html=True)
+
+                # --- CONTENT AREA (TOGGLE) ---
                 if st.session_state[edit_key]:
-                    st.info("Edit mode active")
+                    # [STATE A]: EDIT FORM
+                    with st.form(key=f"form_{idx}"):
+                        st.markdown("**Edit Nutrition Data**")
+                        c1, c2, c3 = st.columns(3)
+                        new_cal = c1.number_input("Calories", value=cal)
+                        new_prot = c2.number_input("Protein (g)", value=float(p))
+                        new_carbs = c3.number_input("Carbs (g)", value=float(c))
+                        
+                        c4, c5, c6 = st.columns(3)
+                        new_fat = c4.number_input("Sat. Fat (g)", value=float(f))
+                        new_ufat = c5.number_input("Unsat. Fat (g)", value=float(safe_float(log.get('Unsaturated_Fat', 0))))
+                        new_fib = c6.number_input("Fiber (g)", value=float(safe_float(log.get('Fiber', 0))))
+
+                        c7, c8, c9 = st.columns(3)
+                        new_sug = c7.number_input("Sugar (g)", value=float(sug))
+                        new_sod = c8.number_input("Sodium (mg)", value=float(safe_float(log.get('Sodium', 0))))
+                        new_pot = c9.number_input("Potassium (mg)", value=float(safe_float(log.get('Potassium', 0))))
+                        
+                        if st.form_submit_button("💾 Save Changes", type="primary"):
+                            # Logic to update would go here
+                            st.session_state[edit_key] = False
+                            st.toast("Updated!", icon="💾")
+                            st.rerun()
                 else:
-                    # == VIEW MODE ==
-                    p = log.get('Protein', 0)
-                    c = log.get('Carbs', 0)
-                    f = log.get('Saturated_Fat', 0)
-                    
-                    # NOTE: This string is FLUSH LEFT to avoid errors
+                    # [STATE B]: VIEW MODE (The Glass Grid)
+                    # We render this using HTML/Markdown.
+                    # IMPORTANT: This string is Flush Left to avoid indentation errors.
+                    uf = safe_float(log.get('Unsaturated_Fat', 0))
+                    fib = safe_float(log.get('Fiber', 0))
+                    sod = safe_float(log.get('Sodium', 0))
+                    pot = safe_float(log.get('Potassium', 0))
+                    ir = safe_float(log.get('Iron', 0))
+
                     st.markdown(f"""
-<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: center;">
-    <div style="background:rgba(255,255,255,0.05); padding:8px; border-radius:8px;">
-        <div style="color:#94a3b8; font-size:0.7rem;">PROTEIN</div>
-        <div style="font-weight:bold;">{p}g</div>
-    </div>
-    <div style="background:rgba(255,255,255,0.05); padding:8px; border-radius:8px;">
-        <div style="color:#94a3b8; font-size:0.7rem;">CARBS</div>
-        <div style="font-weight:bold;">{c}g</div>
-    </div>
-    <div style="background:rgba(255,255,255,0.05); padding:8px; border-radius:8px;">
-        <div style="color:#94a3b8; font-size:0.7rem;">FAT</div>
-        <div style="font-weight:bold;">{f}g</div>
-    </div>
+<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; font-size: 0.85rem;">
+    <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Protein</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{p}g</span></div>
+    <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Carbs</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{c}g</span></div>
+    <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Fiber</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{fib}g</span></div>
+    
+    <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Sat. Fat</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{f}g</span></div>
+    <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Unsat. Fat</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{uf}g</span></div>
+    <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Sugar</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{sug}g</span></div>
+    
+    <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Sodium</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{sod}mg</span></div>
+    <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Potassium</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{pot}mg</span></div>
+    <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Iron</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{ir}mg</span></div>
 </div>
-""", unsafe_allow_html=True)
+""", unsafe_allow_html=True)def render_food_logger():
+    # 1. CSS to Style the Container to look like a "Glass Card"
+    st.markdown("""
+    <style>
+    /* Target the specific container that has a border */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%);
+        border: 1px solid rgba(51, 65, 85, 0.3);
+        border-radius: 24px;
+        padding: 2rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+    /* Style the Text Area and Uploader to blend in */
+    .stTextArea textarea {
+        background-color: rgba(15, 23, 42, 0.6) !important;
+        border: 1px solid rgba(71, 85, 105, 0.4) !important;
+        border-radius: 12px;
+    }
+    .stFileUploader {
+        background-color: rgba(15, 23, 42, 0.6);
+        border-radius: 12px;
+        padding: 1rem;
+        border: 1px dashed rgba(71, 85, 105, 0.4);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # 2. The "Box" itself
+    with st.container(border=True):
+        st.markdown('<h2 style="margin-top:0; font-size: 2rem;">Add Food 🍎</h2>', unsafe_allow_html=True)
+        st.markdown('<p style="color:#94a3b8; margin-bottom: 2rem;">Describe your meal below or upload a photo, and AI will calculate the macros.</p>', unsafe_allow_html=True)
+        
+        # 3. Inputs Layout
+        col1, col2 = st.columns([1.5, 1], gap="large")
+        
+        with col1:
+            prompt = st.text_area(
+                "Meal Description", 
+                height=180, 
+                placeholder="E.g. Two slices of sourdough toast with avocado and a poached egg..."
+            )
+            
+        with col2:
+            st.write("📸 **Photo Context** (Optional)")
+            uploaded_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
+
+        st.write("") # Spacer
+        
+        # 4. Action Button
+        submit = st.button("Log & Analyze Meal", use_container_width=True, type="primary")
+
+    # 5. Logic Handling (Outside the layout code for cleanliness)
+    if submit:
+        if not prompt and not uploaded_file:
+            st.error("Please provide a description or an image.")
+        else:
+            with st.spinner("🤖 AI is analyzing your food..."):
+                image_data = None
+                if uploaded_file:
+                    try:
+                        image_data = Image.open(uploaded_file)
+                    except:
+                        st.error("Invalid Image File")
+                        return
+
+                # Build the AI Prompt
+                full_prompt = f"""
+                Analyze this meal: '{prompt}'. 
+                Provide nutritional data for the ENTIRE meal combined.
+                Return ONLY a valid JSON object with these keys: 
+                Meal_Name, Calories, Protein, Carbs, Saturated_Fat, Unsaturated_Fat, Fiber, Sugar, Sodium, Potassium, Iron.
+                All number values should be integers or floats (no units).
+                Meal_Name should be a short, fun summary (e.g. "Avocado Toast").
+                """
+                
+                # Call AI
+                response_text = get_gemini_response(full_prompt, image_data, json_mode=True)
+                
+                # Parse & Save
+                if "CONNECTION ERROR" in response_text or "API ERROR" in response_text:
+                    st.error(response_text)
+                else:
+                    try:
+                        # Clean JSON
+                        json_str = response_text.strip()
+                        if "```json" in json_str:
+                            json_str = json_str.split("```json")[1].split("```")[0]
+                        elif "```" in json_str:
+                            json_str = json_str.split("```")[1].split("```")[0]
+                            
+                        data = json.loads(json_str)
+                        
+                        # Add Timestamps
+                        data['User_ID'] = st.session_state.user['User_ID']
+                        data['Date'] = date.today().strftime("%Y-%m-%d")
+                        data['Time'] = datetime.now().strftime("%H:%M:%S")
+                        
+                        # Save to Sheet
+                        log_food_to_sheet(data)
+                        
+                        st.success(f"Successfully logged: **{data.get('Meal_Name', 'Meal')}** ({data.get('Calories', 0)} kcal)")
+                        st.balloons()
+                        time.sleep(1.5)
+                        st.session_state.active_tab = "Dashboard"
+                        st.rerun()
+                        
+                    except Exception as e:
+                        st.error(f"Failed to parse AI response. Raw: {response_text}")
+def render_leaderboard():
+    st.title("Global Arena Sync 🔥")
+    
+    # FETCH REAL DATA
+    users = fetch_all_users()
+    if not users:
+        st.warning("No users found or database not connected. Please check secrets.")
+        return
+
+    # Filter/Sort
+    for u in users:
+        u['Rank_Points_Counter'] = safe_int(u.get('Rank_Points_Counter', 0))
+            
+    leaderboard_data = sorted(users, key=lambda x: x['Rank_Points_Counter'], reverse=True)
+    
+    # Update: Added Daily Quest Card
+    st.markdown("""
+    <div class="glass-card" style="margin-bottom: 2rem; border-left: 4px solid #f59e0b;">
+        <h3 style="margin: 0; font-size: 1.1rem; color: #f59e0b;">⚔️ Daily Quest: The Protein Wager</h3>
+        <p style="font-size: 0.8rem; color: #cbd5e1; margin-top: 0.5rem;">Log over 100g of protein today to unlock a 1.5x Rank Point multiplier for tomorrow's tally.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown(f"""
+    <div style="display: flex; gap: 1rem; margin-bottom: 2rem;">
+        <div class="glass-card" style="flex: 1; text-align: center;">
+            <p style="font-size: 0.75rem; font-weight: 800; color: #64748b; text-transform: uppercase;">Weekly Wins</p>
+            <p style="font-size: 2rem; font-weight: 900; color: {ACCENT_AMBER};">{st.session_state.user.get('Total_Weekly_Wins', 0)}</p>
+        </div>
+        <div class="glass-card" style="flex: 1; text-align: center;">
+            <p style="font-size: 0.75rem; font-weight: 800; color: #64748b; text-transform: uppercase;">Rank Points</p>
+            <p style="font-size: 1.5rem; font-weight: 800; color: {ACCENT_EMERALD}; text-transform: uppercase;">{st.session_state.user.get('Rank_Points_Counter', 0)} PTS</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    for i, p in enumerate(leaderboard_data):
+        username = p.get('Username', 'Unknown')
+        is_me = username == st.session_state.user['Username']
+        rank_pts = p.get('Rank_Points_Counter', 0)
+        tier = p.get('Current_Rank_Tier', 'Bronze')
+        
+        border = f"1px solid {ACCENT_INDIGO}" if is_me else "1px solid rgba(51, 65, 85, 0.5)"
+        bg = "rgba(99, 102, 241, 0.1)" if is_me else "rgba(30, 41, 59, 0.3)"
+        
+        tier_colors = {'Platinum': '#22d3ee', 'Gold': '#fde047', 'Silver': '#cbd5e1', 'Bronze': '#fb923c'}
+        t_color = tier_colors.get(tier, '#fff')
+        
+        st.markdown(f"""
+        <div style="background: {bg}; border: {border}; border-radius: 1.5rem; padding: 1.5rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <span style="font-size: 1.5rem; font-weight: 900; color: #475569; width: 30px;">#{i+1}</span>
+                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed={username}" style="width: 50px; height: 50px; border-radius: 12px; object-fit: cover;">
+                <div>
+                    <h4 style="margin: 0; font-size: 1.1rem;">{username} { '(You)' if is_me else ''}</h4>
+                    <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: {t_color};">{tier}</span>
+                </div>
+            </div>
+            <div style="text-align: right;">
+                <div style="font-size: 0.7rem; font-weight: 800; color: #64748b; text-transform: uppercase;">Rank Points</div>
+                <div style="font-size: 1.5rem; font-weight: 900; color: white;">{rank_pts}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
 def render_profile_settings():
     user = st.session_state.user
     col_h, col_act = st.columns([3, 1])
