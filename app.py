@@ -226,7 +226,7 @@ def get_gemini_response(prompt, image=None, json_mode=False):
             
         # Generate content
         response = client.models.generate_content(
-            model='gemini-1.5-flash',
+            model='gemini-pro',
             contents=contents,
             config=config
         )
