@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
-import google.generativeai as genai
+from google import genai
 import json
 import uuid
 import time
@@ -204,23 +204,35 @@ if 'active_tab' not in st.session_state:
     st.session_state.active_tab = "Dashboard"
 
 def get_gemini_response(prompt, image=None, json_mode=False):
-    """Call Gemini API."""
+    """Call Gemini API using the new google-genai SDK."""
     api_key = st.secrets.get("GEMINI_API_KEY")
     if not api_key: 
         return "ERROR_NO_KEY"
         
     try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-pro')
-        config = genai.GenerationConfig(response_mime_type="application/json") if json_mode else None
+        # Initialize the new Client
+        client = genai.Client(api_key=api_key)
         
-        parts = [prompt]
+        # Prepare contents (handle image if present)
+        contents = []
         if image:
-            parts.insert(0, image)
+            contents.append(image)
+        contents.append(prompt)
+        
+        # Prepare config
+        config = {}
+        if json_mode:
+            config['response_mime_type'] = 'application/json'
             
-        response = model.generate_content(parts, generation_config=config)
+        # Generate content
+        response = client.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=contents,
+            config=config
+        )
         return response.text
     except Exception as e:
+        # RETURN THE ACTUAL ERROR SO WE CAN SEE IT
         return f"ERROR_DETAILS: {str(e)}"
 
 # DATA HELPERS
@@ -852,10 +864,10 @@ def main():
             if st.button("Test AI Connection"):
                 try:
                     # Force the key from secrets
-                    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                    client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
                     
-                    # Ask Google: "What models can I use?"
-                    models = list(genai.list_models())
+                    # Check connection by listing models
+                    models = list(client.models.list())
                     
                     st.success(f"✅ Connection Success! Found {len(models)} models.")
                     
