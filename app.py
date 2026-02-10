@@ -469,7 +469,7 @@ def render_dashboard():
     .streamlit-expanderHeader {{
         background-color: transparent !important;
         color: white !important;
-        font-family: monospace; /* Monospace helps align the numbers in the title */
+        font-family: monospace;
         font-size: 0.85rem !important;
         padding: 0.75rem 1rem !important;
     }}
@@ -500,7 +500,7 @@ def render_dashboard():
     }}
     /* Specific styling for the last button in the row (The Trash Can) */
     div[data-testid="column"]:last-child button {{
-        color: {ACCENT_RED} !important; /* Make icon red */
+        color: {ACCENT_RED} !important;
     }}
     div[data-testid="column"]:last-child button:hover {{
         background: rgba(248, 113, 113, 0.2) !important;
@@ -607,8 +607,7 @@ def render_dashboard():
         f = safe_float(log.get('Saturated_Fat', 0))
         sug = safe_float(log.get('Sugar', 0))
         
-        # SMART LABEL: "Meal | 350kcal | 30g P | 40g C | 10g F | 5g S"
-        # We use a nice format so you see the summary WITHOUT opening the tab
+        # SMART LABEL
         label_text = f"{name}  |  {cal} kcal  •  {p}g P  •  {c}g C  •  {f}g F  •  {sug}g S"
         
         unique_id = name + str(cal)
@@ -664,20 +663,18 @@ def render_dashboard():
                         new_pot = c9.number_input("Potassium (mg)", value=float(safe_float(log.get('Potassium', 0))))
                         
                         if st.form_submit_button("💾 Save Changes", type="primary"):
-                            # Logic to update would go here
                             st.session_state[edit_key] = False
                             st.toast("Updated!", icon="💾")
                             st.rerun()
                 else:
                     # [STATE B]: VIEW MODE (The Glass Grid)
-                    # We render this using HTML/Markdown.
-                    # IMPORTANT: This string is Flush Left to avoid indentation errors.
                     uf = safe_float(log.get('Unsaturated_Fat', 0))
                     fib = safe_float(log.get('Fiber', 0))
                     sod = safe_float(log.get('Sodium', 0))
                     pot = safe_float(log.get('Potassium', 0))
                     ir = safe_float(log.get('Iron', 0))
 
+                    # NOTE: This string is FLUSH LEFT to prevent code-block rendering
                     st.markdown(f"""
 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; font-size: 0.85rem;">
     <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Protein</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{p}g</span></div>
@@ -693,114 +690,6 @@ def render_dashboard():
     <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Iron</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{ir}mg</span></div>
 </div>
 """, unsafe_allow_html=True)
-def render_food_logger():
-    # 1. CSS to Style the Container to look like a "Glass Card"
-    st.markdown("""
-    <style>
-    /* Target the specific container that has a border */
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        background: linear-gradient(135deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%);
-        border: 1px solid rgba(51, 65, 85, 0.3);
-        border-radius: 24px;
-        padding: 2rem;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-    }
-    /* Style the Text Area and Uploader to blend in */
-    .stTextArea textarea {
-        background-color: rgba(15, 23, 42, 0.6) !important;
-        border: 1px solid rgba(71, 85, 105, 0.4) !important;
-        border-radius: 12px;
-    }
-    .stFileUploader {
-        background-color: rgba(15, 23, 42, 0.6);
-        border-radius: 12px;
-        padding: 1rem;
-        border: 1px dashed rgba(71, 85, 105, 0.4);
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # 2. The "Box" itself
-    with st.container(border=True):
-        st.markdown('<h2 style="margin-top:0; font-size: 2rem;">Add Food 🍎</h2>', unsafe_allow_html=True)
-        st.markdown('<p style="color:#94a3b8; margin-bottom: 2rem;">Describe your meal below or upload a photo, and AI will calculate the macros.</p>', unsafe_allow_html=True)
-        
-        # 3. Inputs Layout
-        col1, col2 = st.columns([1.5, 1], gap="large")
-        
-        with col1:
-            prompt = st.text_area(
-                "Meal Description", 
-                height=180, 
-                placeholder="E.g. Two slices of sourdough toast with avocado and a poached egg..."
-            )
-            
-        with col2:
-            st.write("📸 **Photo Context** (Optional)")
-            uploaded_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
-
-        st.write("") # Spacer
-        
-        # 4. Action Button
-        submit = st.button("Log & Analyze Meal", use_container_width=True, type="primary")
-
-    # 5. Logic Handling (Outside the layout code for cleanliness)
-    if submit:
-        if not prompt and not uploaded_file:
-            st.error("Please provide a description or an image.")
-        else:
-            with st.spinner("🤖 AI is analyzing your food..."):
-                image_data = None
-                if uploaded_file:
-                    try:
-                        image_data = Image.open(uploaded_file)
-                    except:
-                        st.error("Invalid Image File")
-                        return
-
-                # Build the AI Prompt
-                full_prompt = f"""
-                Analyze this meal: '{prompt}'. 
-                Provide nutritional data for the ENTIRE meal combined.
-                Return ONLY a valid JSON object with these keys: 
-                Meal_Name, Calories, Protein, Carbs, Saturated_Fat, Unsaturated_Fat, Fiber, Sugar, Sodium, Potassium, Iron.
-                All number values should be integers or floats (no units).
-                Meal_Name should be a short, fun summary (e.g. "Avocado Toast").
-                """
-                
-                # Call AI
-                response_text = get_gemini_response(full_prompt, image_data, json_mode=True)
-                
-                # Parse & Save
-                if "CONNECTION ERROR" in response_text or "API ERROR" in response_text:
-                    st.error(response_text)
-                else:
-                    try:
-                        # Clean JSON
-                        json_str = response_text.strip()
-                        if "```json" in json_str:
-                            json_str = json_str.split("```json")[1].split("```")[0]
-                        elif "```" in json_str:
-                            json_str = json_str.split("```")[1].split("```")[0]
-                            
-                        data = json.loads(json_str)
-                        
-                        # Add Timestamps
-                        data['User_ID'] = st.session_state.user['User_ID']
-                        data['Date'] = date.today().strftime("%Y-%m-%d")
-                        data['Time'] = datetime.now().strftime("%H:%M:%S")
-                        
-                        # Save to Sheet
-                        log_food_to_sheet(data)
-                        
-                        st.success(f"Successfully logged: **{data.get('Meal_Name', 'Meal')}** ({data.get('Calories', 0)} kcal)")
-                        st.balloons()
-                        time.sleep(1.5)
-                        st.session_state.active_tab = "Dashboard"
-                        st.rerun()
-                        
-                    except Exception as e:
-                        st.error(f"Failed to parse AI response. Raw: {response_text}")
 def render_leaderboard():
     st.title("Global Arena Sync 🔥")
     
