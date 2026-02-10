@@ -208,16 +208,12 @@ if 'active_tab' not in st.session_state:
     st.session_state.active_tab = "Dashboard"
 
 def get_gemini_response(prompt, image=None, json_mode=False):
-    """
-    Direct API Connection with Auto-Retry for 503 (Server Overload) Errors.
-    """
+    """Direct API Connection with Auto-Retry for 503 Errors."""
     api_key = st.secrets.get("GEMINI_API_KEY")
     if not api_key: return "ERROR: No API Key found in secrets."
 
-    # Use 'gemini-flash-latest' to get the most stable free model
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
     
-    # 1. Prepare Image
     parts = [{"text": prompt}]
     if image:
         try:
@@ -228,47 +224,75 @@ def get_gemini_response(prompt, image=None, json_mode=False):
         except Exception as e:
             return f"IMAGE ERROR: {str(e)}"
 
-    # 2. Payload
     payload = {"contents": [{"parts": parts}]}
     if json_mode:
         payload["generationConfig"] = {"response_mime_type": "application/json"}
 
-    # 3. Send Request with RETRY Logic (The New Part)
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            response = requests.post(
-                url, 
-                headers={"Content-Type": "application/json"}, 
-                json=payload, 
-                timeout=30
-            )
-            
-            # SUCCESS: Return the text immediately
+            response = requests.post(url, headers={"Content-Type": "application/json"}, json=payload, timeout=30)
             if response.status_code == 200:
                 return response.json()['candidates'][0]['content']['parts'][0]['text']
-            
-            # BUSY SIGNAL (503): Wait and try again
             if response.status_code == 503:
-                time.sleep(2)  # Wait 2 seconds
-                continue       # Loop back and try again
-            
-            # OTHER ERRORS: Stop and report
+                time.sleep(2)
+                continue
             return f"API ERROR ({response.status_code}): {response.text}"
-            
         except Exception as e:
             return f"CONNECTION ERROR: {str(e)}"
-            
-    return "SERVER BUSY: Google is overloaded right now. Please try again in a minute."
-
-
-    # ... [Keep get_gemini_response as is] ...
-
-    return "SERVER BUSY: Google is overloaded right now. Please try again in a minute."
+    return "SERVER BUSY: Google is overloaded right now."
 
 # --- DATA HELPERS ---
 def fetch_all_users():
-    # ... [Keep this function as is] ...
+    client = get_db_connection()
+    if not client: return []
+    try:
+        sheet = get_main_sheet(client)
+        return sheet.get_all_records()
+    except: return []
+
+def register_user(username, password):
+    client = get_db_connection()
+    if not client: return False, "Database not connected."
+    try:
+        sheet = get_main_sheet(client)
+        new_id = f"u_{str(uuid.uuid4())[:6]}"
+        row = [new_id, username, password, 2000, 150, 200, 20, 50, 25, 30, 2000, 3000, 15, "Bronze", 1.0, 0, 0, 0, 25, "Male", 70, 175, 1.2, "Maintain", "metric", "No"]
+        sheet.append_row(row)
+        return True, "Registration successful! Awaiting approval."
+    except Exception as e: return False, str(e)
+
+def log_food_to_sheet(user_id, entry_data):
+    client = get_db_connection()
+    if not client: return
+    try:
+        sheet = client.open_by_key(SHEET_ID).worksheet("Food_Logs")
+        row = [entry_data['Log_ID'], entry_data['Timestamp'], entry_data['Date_Ref'], user_id, entry_data['Meal_Name'], entry_data['Calories'], entry_data['Protein'], entry_data['Carbs'], entry_data['Saturated_Fat'], entry_data['Unsaturated_Fat'], entry_data['Fiber'], entry_data['Sugar'], entry_data['Sodium'], entry_data['Potassium'], entry_data['Iron']]
+        sheet.append_row(row)
+    except: pass
+
+def get_today_logs(user_id):
+    client = get_db_connection()
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    if not client: return []
+    try:
+        sheet = client.open_by_key(SHEET_ID).worksheet("Food_Logs")
+        return [r for r in sheet.get_all_records() if str(r['User_ID']) == str(user_id) and r['Date_Ref'] == today_str]
+    except: return []
+
+def update_user_targets_db(user_id, new_data):
+    client = get_db_connection()
+    if not client: return True
+    try:
+        sheet = get_main_sheet(client)
+        cell = sheet.find(user_id)
+        if cell:
+            headers = sheet.row_values(1)
+            for key, val in new_data.items():
+                if key in headers:
+                    sheet.update_cell(cell.row, headers.index(key) + 1, val)
+            return True
+    except: return False
 
 # --- UI COMPONENTS ---
 def render_rank_card(user):
@@ -276,63 +300,39 @@ def render_rank_card(user):
     level = int(xp // 1000) + 1
     current_level_xp = xp - ((level - 1) * 1000)
     progress_pct = min((current_level_xp / 1000) * 100, 100)
-    tier = user.get('Tier', 'Bronze')
-    streak = user.get('Streak', 0)
-    name = user.get('Name', 'User')
+    tier, streak, name = user.get('Tier', 'Bronze'), user.get('Streak', 0), user.get('Name', 'User')
 
     html_content = f"""
 <style>
     .rank-card {{
         background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
         border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 16px;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        position: relative;
-        overflow: hidden;
+        border-radius: 16px; padding: 1.5rem; margin-bottom: 1.5rem;
     }}
     .progress-track {{
-        width: 100%;
-        height: 10px;
-        background-color: rgba(255, 255, 255, 0.1);
-        border-radius: 999px;
-        margin-top: 1rem;
-        margin-bottom: 0.5rem;
-        overflow: hidden;
+        width: 100%; height: 10px; background: rgba(255, 255, 255, 0.1);
+        border-radius: 999px; margin-top: 1rem; overflow: hidden;
     }}
     .progress-fill {{
-        height: 100%;
-        width: {progress_pct}%;
-        background: linear-gradient(90deg, #10b981, #34d399);
-        border-radius: 999px;
-        transition: width 0.5s ease-in-out;
+        height: 100%; width: {progress_pct}%; background: linear-gradient(90deg, #10b981, #34d399);
+        border-radius: 999px; transition: width 0.5s ease;
     }}
 </style>
-
 <div class="rank-card">
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
             <h2 style="margin: 0; font-size: 1.5rem; color: white;">{name}</h2>
             <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.25rem;">
-                <span style="background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 2px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">
-                    {tier} Tier
-                </span>
+                <span style="background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 2px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">{tier} Tier</span>
                 <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 600;">• Lvl {level}</span>
             </div>
         </div>
         <div style="text-align: right;">
             <div style="font-size: 1.25rem;">🔥 {streak}</div>
-            <div style="font-size: 0.65rem; color: #64748b; text-transform: uppercase; font-weight: 700;">Day Streak</div>
+            <div style="font-size: 0.65rem; color: #64748b; text-transform: uppercase;">Day Streak</div>
         </div>
     </div>
-    <div class="progress-track">
-        <div class="progress-fill"></div>
-    </div>
-    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #94a3b8; font-weight: 600;">
-        <span>{int(current_level_xp)} XP</span>
-        <span>{int(1000 - current_level_xp)} XP to Level {level + 1}</span>
-    </div>
+    <div class="progress-track"><div class="progress-fill"></div></div>
 </div>
 """
     st.markdown(html_content, unsafe_allow_html=True)
