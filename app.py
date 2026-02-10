@@ -207,36 +207,60 @@ if 'active_tab' not in st.session_state:
     st.session_state.active_tab = "Dashboard"
 
 def get_gemini_response(prompt, image=None, json_mode=False):
-    """Call Gemini API using the new google-genai SDK."""
+    """
+    Direct API Connection: Bypasses the buggy google-generativeai library
+    to talk directly to Google's servers via HTTP.
+    """
     api_key = st.secrets.get("GEMINI_API_KEY")
-    if not api_key: 
-        return "ERROR_NO_KEY"
-        
+    if not api_key: return "ERROR: No API Key found in secrets."
+
+    # We use the 'gemini-1.5-flash' model on the 'v1beta' endpoint manually
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    
+    # 1. Prepare the Image (if present)
+    parts = [{"text": prompt}]
+    if image:
+        try:
+            # Convert PIL image to Base64 bytes
+            buffered = io.BytesIO()
+            image.save(buffered, format="JPEG")
+            img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+            parts.append({
+                "inline_data": {
+                    "mime_type": "image/jpeg",
+                    "data": img_b64
+                }
+            })
+        except Exception as e:
+            return f"IMAGE ERROR: {str(e)}"
+
+    # 2. Construct the Payload
+    payload = {
+        "contents": [{"parts": parts}]
+    }
+    
+    # 3. Handle JSON Mode
+    if json_mode:
+        payload["generationConfig"] = {"response_mime_type": "application/json"}
+
+    # 4. Send Request
     try:
-        # Initialize the new Client
-        client = genai.Client(api_key=api_key)
-        
-        # Prepare contents (handle image if present)
-        contents = []
-        if image:
-            contents.append(image)
-        contents.append(prompt)
-        
-        # Prepare config
-        config = {}
-        if json_mode:
-            config['response_mime_type'] = 'application/json'
-            
-        # Generate content
-        response = client.models.generate_content(
-            model='gemini-pro',
-            contents=contents,
-            config=config
+        response = requests.post(
+            url, 
+            headers={"Content-Type": "application/json"}, 
+            json=payload,
+            timeout=10
         )
-        return response.text
+        
+        # Check for errors (404, 403, 500, etc)
+        if response.status_code != 200:
+            return f"API ERROR ({response.status_code}): {response.text}"
+            
+        return response.json()['candidates'][0]['content']['parts'][0]['text']
+        
     except Exception as e:
-        # RETURN THE ACTUAL ERROR SO WE CAN SEE IT
-        return f"ERROR_DETAILS: {str(e)}"
+        return f"CONNECTION ERROR: {str(e)}"
+
 
 # DATA HELPERS
 
