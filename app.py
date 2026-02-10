@@ -593,68 +593,113 @@ def render_dashboard():
 
 
 def render_food_logger():
-    st.title("Add Food 🍎")
-    st.markdown("Describe your meal and AI will analyze nutritional content.")
+    # 1. CSS to Style the Container to look like a "Glass Card"
+    st.markdown("""
+    <style>
+    /* Target the specific container that has a border */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%);
+        border: 1px solid rgba(51, 65, 85, 0.3);
+        border-radius: 24px;
+        padding: 2rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+    /* Style the Text Area and Uploader to blend in */
+    .stTextArea textarea {
+        background-color: rgba(15, 23, 42, 0.6) !important;
+        border: 1px solid rgba(71, 85, 105, 0.4) !important;
+        border-radius: 12px;
+    }
+    .stFileUploader {
+        background-color: rgba(15, 23, 42, 0.6);
+        border-radius: 12px;
+        padding: 1rem;
+        border: 1px dashed rgba(71, 85, 105, 0.4);
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-    with st.container():
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        col1, col2 = st.columns([2, 1])
+    # 2. The "Box" itself
+    with st.container(border=True):
+        st.markdown('<h2 style="margin-top:0; font-size: 2rem;">Add Food 🍎</h2>', unsafe_allow_html=True)
+        st.markdown('<p style="color:#94a3b8; margin-bottom: 2rem;">Describe your meal below or upload a photo, and AI will calculate the macros.</p>', unsafe_allow_html=True)
+        
+        # 3. Inputs Layout
+        col1, col2 = st.columns([1.5, 1], gap="large")
+        
         with col1:
-            description = st.text_area("Meal Description", placeholder="E.g. Large Caesar salad with extra chicken", height=150)
-        with col2:
-            uploaded_file = st.file_uploader("📸 Add Photo Context", type=['jpg', 'png', 'jpeg'])
+            prompt = st.text_area(
+                "Meal Description", 
+                height=180, 
+                placeholder="E.g. Two slices of sourdough toast with avocado and a poached egg..."
+            )
             
-        if st.button("Log & Analyze", type="primary", use_container_width=True):
-            if not description:
-                st.warning("Please provide a description.")
-            else:
-                with st.spinner("AI analyzing nutrient profile..."):
-                    img_blob = None
-                    if uploaded_file:
-                        try:
-                            from PIL import Image
-                            img = Image.open(uploaded_file)
-                            img_blob = img
-                        except: pass
+        with col2:
+            st.write("📸 **Photo Context** (Optional)")
+            uploaded_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
 
-                    # Prompt asking for JSON specifically
-                    prompt = f"""
-                    Analyze this food: "{description}". 
-                    Return JSON with keys: Meal_Name, Calories, Protein, Carbs, Saturated_Fat, Unsaturated_Fat, Fiber, Sugar, Sodium, Potassium, Iron.
-                    Values should be numbers (no units). Estimates.
-                    """
-                    
-                    res_text = get_gemini_response(prompt, img_blob, json_mode=True)
-                    
-                    # --- CHECK FOR ERRORS BEFORE PARSING ---
-                    if res_text.startswith("ERROR"):
-                        if "NO_KEY" in res_text:
-                            st.error("Please add `GEMINI_API_KEY` to `.streamlit/secrets.toml`.")
-                        else:
-                            st.error(f"AI Connection Failed. Details: {res_text}")
-                    elif res_text:
-                        try:
-                            clean_res = res_text.replace("```json", "").replace("```", "").strip()
-                            data = json.loads(clean_res)
+        st.write("") # Spacer
+        
+        # 4. Action Button
+        submit = st.button("Log & Analyze Meal", use_container_width=True, type="primary")
+
+    # 5. Logic Handling (Outside the layout code for cleanliness)
+    if submit:
+        if not prompt and not uploaded_file:
+            st.error("Please provide a description or an image.")
+        else:
+            with st.spinner("🤖 AI is analyzing your food..."):
+                image_data = None
+                if uploaded_file:
+                    try:
+                        image_data = Image.open(uploaded_file)
+                    except:
+                        st.error("Invalid Image File")
+                        return
+
+                # Build the AI Prompt
+                full_prompt = f"""
+                Analyze this meal: '{prompt}'. 
+                Provide nutritional data for the ENTIRE meal combined.
+                Return ONLY a valid JSON object with these keys: 
+                Meal_Name, Calories, Protein, Carbs, Saturated_Fat, Unsaturated_Fat, Fiber, Sugar, Sodium, Potassium, Iron.
+                All number values should be integers or floats (no units).
+                Meal_Name should be a short, fun summary (e.g. "Avocado Toast").
+                """
+                
+                # Call AI
+                response_text = get_gemini_response(full_prompt, image_data, json_mode=True)
+                
+                # Parse & Save
+                if "CONNECTION ERROR" in response_text or "API ERROR" in response_text:
+                    st.error(response_text)
+                else:
+                    try:
+                        # Clean JSON
+                        json_str = response_text.strip()
+                        if "```json" in json_str:
+                            json_str = json_str.split("```json")[1].split("```")[0]
+                        elif "```" in json_str:
+                            json_str = json_str.split("```")[1].split("```")[0]
                             
-                            data['Log_ID'] = str(uuid.uuid4())[:8]
-                            data['Timestamp'] = time.time()
-                            data['Date_Ref'] = datetime.now().strftime("%Y-%m-%d")
-                            
-                            log_food_to_sheet(st.session_state.user['User_ID'], data)
-                            st.success(f"Logged: {data.get('Meal_Name', 'Food')}")
-                            time.sleep(1)
-                            st.session_state.active_tab = "Dashboard"
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Failed to parse AI response.")
-                            with st.expander("Debug Raw Output"):
-                                st.code(res_text)
-                    else:
-                        st.error("AI returned no response.")
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
+                        data = json.loads(json_str)
+                        
+                        # Add Timestamps
+                        data['User_ID'] = st.session_state.user['User_ID']
+                        data['Date'] = date.today().strftime("%Y-%m-%d")
+                        data['Time'] = datetime.now().strftime("%H:%M:%S")
+                        
+                        # Save to Sheet
+                        log_food_to_sheet(data)
+                        
+                        st.success(f"Successfully logged: **{data.get('Meal_Name', 'Meal')}** ({data.get('Calories', 0)} kcal)")
+                        st.balloons()
+                        time.sleep(1.5)
+                        st.session_state.active_tab = "Dashboard"
+                        st.rerun()
+                        
+                    except Exception as e:
+                        st.error(f"Failed to parse AI response. Raw: {response_text}")
 def render_leaderboard():
     st.title("Global Arena Sync 🔥")
     
