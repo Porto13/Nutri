@@ -449,41 +449,45 @@ def render_rank_card(user):
     st.markdown(html, unsafe_allow_html=True)
 
 def render_dashboard():
+    # --- FIX: DEFINE COLORS RIGHT HERE ---
+    ACCENT_BLUE = "#60a5fa"
+    ACCENT_RED = "#f87171"
+    
     user = st.session_state.user
     
     # --- 1. CSS TO MAKE EXPANDERS LOOK LIKE GLASS CARDS ---
-    st.markdown("""
+    st.markdown(f"""
     <style>
     /* Style the Container (The Card) */
-    .stExpander {
+    .stExpander {{
         background: rgba(30, 41, 59, 0.4);
         border: 1px solid rgba(51, 65, 85, 0.3);
         border-radius: 12px;
         margin-bottom: 0.75rem;
         overflow: hidden;
-    }
+    }}
     
     /* Style the Header (Clickable Part) */
-    .streamlit-expanderHeader {
+    .streamlit-expanderHeader {{
         background-color: transparent !important;
         font-family: "Source Sans Pro", sans-serif;
         color: white !important;
         font-size: 1rem !important;
-    }
+    }}
     
     /* Make the content area dark/glassy */
-    .streamlit-expanderContent {
+    .streamlit-expanderContent {{
         background: rgba(15, 23, 42, 0.3);
         border-top: 1px solid rgba(51, 65, 85, 0.3);
         color: white;
-    }
+    }}
     
     /* Custom Small Buttons for Edit/Delete */
-    div[data-testid="column"] button {
+    div[data-testid="column"] button {{
         padding: 0rem 0.5rem;
         font-size: 0.8rem;
         height: 2.2rem;
-    }
+    }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -500,10 +504,7 @@ def render_dashboard():
     # --- 3. GET LOGS & HANDLE UPDATES ---
     logs = get_today_logs(user['User_ID'])
     
-    # (Optional: If we just edited/deleted, we rely on session state to keep UI snappy)
-    # Note: In a full app, you would write these changes back to the Sheet here.
-    
-    # Calculate Totals from the logs
+    # Calculate Totals
     totals = {k: sum(safe_float(l.get(k, 0)) for l in logs) for k in ['Calories', 'Protein', 'Carbs', 'Saturated_Fat', 'Unsaturated_Fat', 'Fiber', 'Sugar', 'Sodium', 'Potassium', 'Iron']}
     
     col1, col2 = st.columns([1, 2])
@@ -572,49 +573,38 @@ def render_dashboard():
     if not logs:
         st.info("No logs yet. Add some food!")
     
-    # REVERSE logs so newest is at the top
     for i, log in enumerate(reversed(logs)):
-        # Create a unique key for each log item
         idx = len(logs) - 1 - i
         
-        # Header String (Simulated Preview)
         name = log.get('Meal_Name', 'Meal')
         cal = int(safe_float(log.get('Calories', 0)))
         p = safe_float(log.get('Protein', 0))
         c = safe_float(log.get('Carbs', 0))
         f = safe_float(log.get('Saturated_Fat', 0))
         
-        header_txt = f"**{name}** &nbsp; <span style='color:{ACCENT_EMERALD}'>🔥 {cal}</span> &nbsp; <span style='color:#cbd5e1; font-size:0.9em'>P:{p} C:{c} F:{f}</span>"
-        
-        # THE EXPANDER (Replaces HTML Card)
+        # THE EXPANDER
         with st.expander(label=f"{name} ({cal} kcal)", expanded=False):
             
-            # Use Session State to toggle Edit Mode per card
             edit_key = f"edit_mode_{idx}"
             if edit_key not in st.session_state: st.session_state[edit_key] = False
             
-            # --- TOOLBAR (Gear & Trash) ---
+            # --- TOOLBAR ---
             t_col1, t_col2, t_col3 = st.columns([6, 1, 1])
             with t_col1:
                 st.markdown(f"<h4 style='margin:0; color:{ACCENT_BLUE};'>{name}</h4>", unsafe_allow_html=True)
             with t_col2:
-                # GEAR BUTTON
                 if st.button("⚙️", key=f"btn_edit_{idx}", help="Edit Nutrients"):
                     st.session_state[edit_key] = not st.session_state[edit_key]
                     st.rerun()
             with t_col3:
-                # TRASH BUTTON (Red)
                 if st.button("🗑️", key=f"btn_del_{idx}", type="primary", help="Delete Log"):
-                    # Placeholder for deletion logic
                     st.toast(f"Deleted {name}!", icon="🗑️")
-                    # In real app: delete_row_from_sheet(idx)
                     st.rerun()
 
-            st.write("") # Spacer
+            st.write("") 
 
-            # --- CONTENT AREA ---
             if st.session_state[edit_key]:
-                # == EDIT MODE ==
+                # EDIT MODE
                 with st.form(key=f"form_{idx}"):
                     st.write("📝 **Edit Nutrients**")
                     c1, c2, c3 = st.columns(3)
@@ -622,19 +612,12 @@ def render_dashboard():
                     new_prot = c2.number_input("Protein (g)", value=float(p))
                     new_carbs = c3.number_input("Carbs (g)", value=float(c))
                     
-                    c4, c5, c6 = st.columns(3)
-                    new_fat = c4.number_input("Sat. Fat (g)", value=float(f))
-                    new_sug = c5.number_input("Sugar (g)", value=float(safe_float(log.get('Sugar',0))))
-                    new_fib = c6.number_input("Fiber (g)", value=float(safe_float(log.get('Fiber',0))))
-
                     if st.form_submit_button("💾 Save Changes", type="primary"):
-                        # UPDATE LOGIC HERE
-                        # log['Calories'] = new_cal ...
                         st.session_state[edit_key] = False
                         st.toast("Updated!", icon="💾")
                         st.rerun()
             else:
-                # == VIEW MODE (The Glass Grid) ==
+                # VIEW MODE
                 st.markdown(f"""
                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; font-size: 0.85rem; padding: 0.5rem;">
                     <div><span style="color: #64748b;">Protein:</span> <strong style="color: white;">{p}g</strong></div>
