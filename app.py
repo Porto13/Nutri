@@ -211,7 +211,7 @@ def get_gemini_response(prompt, image=None, json_mode=False):
         
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('gemini-1.5-flash')
         config = genai.GenerationConfig(response_mime_type="application/json") if json_mode else None
         
         parts = [prompt]
