@@ -398,55 +398,68 @@ def update_user_targets_db(user_id, new_data):
 # -----------------------------------------------------------------------------
 
 def render_rank_card(user):
-    pts = safe_int(user.get('Rank_Points_Counter', 0))
-
-    if pts > 450:
-        tier, next_tier, min_p, max_p, color, icon = 'Platinum', 'Max Rank', 450, 1000, 'linear-gradient(to right, #22d3ee, #2563eb)', '💠'
-    elif pts > 250:
-        tier, next_tier, min_p, max_p, color, icon = 'Gold', 'Platinum', 250, 450, 'linear-gradient(to right, #fde047, #d97706)', '🥇'
-    elif pts > 100:
-        tier, next_tier, min_p, max_p, color, icon = 'Silver', 'Gold', 100, 250, 'linear-gradient(to right, #cbd5e1, #64748b)', '🥈'
-    else:
-        tier, next_tier, min_p, max_p, color, icon = 'Bronze', 'Silver', 0, 100, 'linear-gradient(to right, #fb923c, #9a3412)', '🥉'
-
-    pct = 100 if tier == 'Platinum' else ((pts - min_p) / (max_p - min_p)) * 100
+    # 1. Calculate Logic
+    xp = safe_float(user.get('XP', 0))
+    level = int(xp // 1000) + 1
+    current_level_xp = xp - ((level - 1) * 1000)
+    progress_pct = min((current_level_xp / 1000) * 100, 100)
     
-    html = f"""
-    <div class="glass-card" style="position: relative; overflow: hidden;">
-        <div style="position: absolute; top: -50px; right: -50px; width: 200px; height: 200px; background: {color}; opacity: 0.15; filter: blur(60px); border-radius: 50%;"></div>
-        <div style="display: flex; align-items: center; gap: 1.5rem; position: relative; z-index: 1;">
-            <div style="position: relative;">
-                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed={user.get('Username', 'User')}" style="width: 80px; height: 80px; border-radius: 20px; border: 2px solid #334155; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); object-fit: cover;">
-                <div style="position: absolute; bottom: -5px; right: -5px; background: #0f172a; padding: 2px; border-radius: 8px; border: 1px solid #1e293b; font-size: 1.2rem;">
-                    {icon}
-                </div>
-            </div>
-            <div style="flex: 1;">
-                <div style="display: flex; justify-content: space-between; align-items: end; margin-bottom: 0.5rem;">
-                    <div>
-                        <h2 style="margin: 0; font-size: 1.5rem; line-height: 1;">{user.get('Username', 'User')}</h2>
-                        <span style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.1em;">{tier} Tier • {user.get('Current_Rank_Multiplier', 1.0)}x Boost</span>
-                    </div>
-                    <div style="text-align: right;">
-                        <span style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: #64748b;">Next: {next_tier}</span>
-                    </div>
-                </div>
-                
-                <div class="progress-container">
-                    <div class="progress-bar" style="width: {pct}%; background: {color};">
-                        <div class="shimmer"></div>
-                    </div>
-                </div>
-                
-                <div style="display: flex; justify-content: space-between; margin-top: 0.5rem;">
-                    <span style="font-size: 0.75rem; font-weight: 600; color: #cbd5e1;">{pts} PTS</span>
-                    <span style="font-size: 0.75rem; font-weight: 600; color: #64748b;">{max_p - pts} to go</span>
-                </div>
+    tier = user.get('Tier', 'Bronze')
+    streak = user.get('Streak', 0)
+    name = user.get('Name', 'User')
+
+    # 2. HTML String (FLUSH LEFT TO PREVENTS ERRORS)
+    html_content = f"""
+<style>
+    .rank-card {{
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        position: relative;
+        overflow: hidden;
+    }}
+    .progress-track {{
+        width: 100%;
+        height: 10px;
+        background-color: rgba(255, 255, 255, 0.1);
+        border-radius: 999px;
+        margin-top: 1rem;
+        margin-bottom: 0.5rem;
+        overflow: hidden;
+    }}
+    .progress-fill {{
+        height: 100%;
+        width: {progress_pct}%;
+        background: linear-gradient(90deg, #10b981, #34d399);
+        border-radius: 999px;
+        transition: width 0.5s ease-in-out;
+    }}
+</style>
+
+<div class="rank-card">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h2 style="margin: 0; font-size: 1.5rem; color: white;">{name}</h2>
+            <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.25rem;">
+                <span style="background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 2px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;">
+                    {tier} Tier
+                </span>
+                <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 600;">•</span>
+                <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 600;">Lvl {level}</span>
             </div>
         </div>
+        <div style="text-align: right;">
+            <div style="font-size: 1.25rem;">🔥 {streak}</div>
+            <div style="font-size: 0.65rem; color: #64748b; text-transform: uppercase; font-weight: 700;">Day Streak</div>
+        </div>
     </div>
-    """
-    st.markdown(html, unsafe_allow_html=True)
+
+    <div class="progress-track">
+        <div class="progress-fill"></div>
+    </div>
 
 def render_dashboard():
     # --- HELPER: DEFINE COLORS ---
