@@ -469,6 +469,8 @@ def render_dashboard():
     .streamlit-expanderHeader {{
         background-color: transparent !important;
         color: white !important;
+        font-family: monospace; /* Monospace helps align the numbers in the title */
+        font-size: 0.85rem !important;
         padding: 0.75rem 1rem !important;
     }}
     .streamlit-expanderContent {{
@@ -496,6 +498,10 @@ def render_dashboard():
         border-color: rgba(255,255,255,0.3) !important;
         transform: scale(1.05);
     }}
+    /* Specific styling for the last button in the row (The Trash Can) */
+    div[data-testid="column"]:last-child button {{
+        color: {ACCENT_RED} !important; /* Make icon red */
+    }}
     div[data-testid="column"]:last-child button:hover {{
         background: rgba(248, 113, 113, 0.2) !important;
         border-color: {ACCENT_RED} !important;
@@ -516,11 +522,9 @@ def render_dashboard():
     # --- 3. GET LOGS (And Filter Deleted Ones) ---
     raw_logs = get_today_logs(user['User_ID'])
     
-    # Initialize deleted list if missing
     if 'deleted_logs' not in st.session_state:
         st.session_state.deleted_logs = []
         
-    # Filter out logs the user just "deleted"
     logs = [l for l in raw_logs if l.get('Meal_Name') + str(l.get('Calories')) not in st.session_state.deleted_logs]
     
     # Calculate Totals
@@ -595,22 +599,32 @@ def render_dashboard():
     for i, log in enumerate(reversed(logs)):
         idx = len(logs) - 1 - i
         
+        # Data Extraction
         name = log.get('Meal_Name', 'Meal')
         cal = int(safe_float(log.get('Calories', 0)))
+        p = safe_float(log.get('Protein', 0))
+        c = safe_float(log.get('Carbs', 0))
+        f = safe_float(log.get('Saturated_Fat', 0))
+        sug = safe_float(log.get('Sugar', 0))
         
-        # Unique identifier for deletion logic
+        # SMART LABEL: "Meal | 350kcal | 30g P | 40g C | 10g F | 5g S"
+        # We use a nice format so you see the summary WITHOUT opening the tab
+        label_text = f"{name}  |  {cal} kcal  •  {p}g P  •  {c}g C  •  {f}g F  •  {sug}g S"
+        
         unique_id = name + str(cal)
         
         with st.container():
-            with st.expander(label=f"{name}  •  {cal} kcal", expanded=False):
+            # OPEN THE TAB
+            with st.expander(label=label_text, expanded=False):
                 
                 edit_key = f"edit_mode_{idx}"
                 if edit_key not in st.session_state: st.session_state[edit_key] = False
                 
-                # --- HEADER ROW (Buttons) ---
+                # --- HEADER ROW ---
                 h_col1, h_col2, h_col3 = st.columns([8, 1, 1])
                 
                 with h_col1:
+                    # Detailed Title inside
                     st.markdown(f"<h4 style='margin:0; padding-top:4px; color:{ACCENT_BLUE}; font-size:1.1rem;'>{name}</h4>", unsafe_allow_html=True)
                 
                 with h_col2:
@@ -620,7 +634,7 @@ def render_dashboard():
                         st.rerun()
                         
                 with h_col3:
-                    # TRASH BUTTON (Visual Delete)
+                    # TRASH BUTTON
                     if st.button("🗑️", key=f"btn_del_{idx}", help="Delete"):
                         st.session_state.deleted_logs.append(unique_id)
                         st.toast(f"Deleted {name}!", icon="🗑️")
@@ -629,62 +643,56 @@ def render_dashboard():
                 st.write("")
                 st.markdown(f"<div style='height:1px; background:rgba(255,255,255,0.1); margin: 0.5rem 0 1rem 0;'></div>", unsafe_allow_html=True)
 
-                # --- CONTENT AREA ---
+                # --- CONTENT AREA (TOGGLE) ---
                 if st.session_state[edit_key]:
-                    # == EDIT MODE (FULL FORM) ==
+                    # [STATE A]: EDIT FORM
                     with st.form(key=f"form_{idx}"):
                         st.markdown("**Edit Nutrition Data**")
-                        # Row 1
                         c1, c2, c3 = st.columns(3)
                         new_cal = c1.number_input("Calories", value=cal)
-                        new_prot = c2.number_input("Protein (g)", value=float(safe_float(log.get('Protein', 0))))
-                        new_carbs = c3.number_input("Carbs (g)", value=float(safe_float(log.get('Carbs', 0))))
+                        new_prot = c2.number_input("Protein (g)", value=float(p))
+                        new_carbs = c3.number_input("Carbs (g)", value=float(c))
                         
-                        # Row 2
                         c4, c5, c6 = st.columns(3)
-                        new_fat = c4.number_input("Sat. Fat (g)", value=float(safe_float(log.get('Saturated_Fat', 0))))
+                        new_fat = c4.number_input("Sat. Fat (g)", value=float(f))
                         new_ufat = c5.number_input("Unsat. Fat (g)", value=float(safe_float(log.get('Unsaturated_Fat', 0))))
                         new_fib = c6.number_input("Fiber (g)", value=float(safe_float(log.get('Fiber', 0))))
 
-                        # Row 3
                         c7, c8, c9 = st.columns(3)
-                        new_sug = c7.number_input("Sugar (g)", value=float(safe_float(log.get('Sugar', 0))))
+                        new_sug = c7.number_input("Sugar (g)", value=float(sug))
                         new_sod = c8.number_input("Sodium (mg)", value=float(safe_float(log.get('Sodium', 0))))
                         new_pot = c9.number_input("Potassium (mg)", value=float(safe_float(log.get('Potassium', 0))))
                         
                         if st.form_submit_button("💾 Save Changes", type="primary"):
-                            # In a real app, you would save these values to the log dictionary/sheet here
+                            # Logic to update would go here
                             st.session_state[edit_key] = False
                             st.toast("Updated!", icon="💾")
                             st.rerun()
                 else:
-                    # == VIEW MODE (THE GLASS GRID) ==
-                    p = safe_float(log.get('Protein', 0))
-                    c = safe_float(log.get('Carbs', 0))
-                    f = safe_float(log.get('Saturated_Fat', 0))
+                    # [STATE B]: VIEW MODE (The Glass Grid)
+                    # We render this using HTML/Markdown.
+                    # IMPORTANT: This string is Flush Left to avoid indentation errors.
                     uf = safe_float(log.get('Unsaturated_Fat', 0))
                     fib = safe_float(log.get('Fiber', 0))
-                    sug = safe_float(log.get('Sugar', 0))
                     sod = safe_float(log.get('Sodium', 0))
                     pot = safe_float(log.get('Potassium', 0))
                     ir = safe_float(log.get('Iron', 0))
 
                     st.markdown(f"""
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; font-size: 0.85rem;">
-                        <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Protein</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{p}g</span></div>
-                        <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Carbs</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{c}g</span></div>
-                        <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Fiber</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{fib}g</span></div>
-                        
-                        <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Sat. Fat</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{f}g</span></div>
-                        <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Unsat. Fat</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{uf}g</span></div>
-                        <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Sugar</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{sug}g</span></div>
-                        
-                        <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Sodium</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{sod}mg</span></div>
-                        <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Potassium</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{pot}mg</span></div>
-                        <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Iron</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{ir}mg</span></div>
-                    </div>
-                    """, unsafe_allow_html=True)
-def render_food_logger():
+<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; font-size: 0.85rem;">
+    <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Protein</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{p}g</span></div>
+    <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Carbs</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{c}g</span></div>
+    <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Fiber</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{fib}g</span></div>
+    
+    <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Sat. Fat</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{f}g</span></div>
+    <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Unsat. Fat</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{uf}g</span></div>
+    <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Sugar</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{sug}g</span></div>
+    
+    <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Sodium</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{sod}mg</span></div>
+    <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Potassium</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{pot}mg</span></div>
+    <div><span style="color: #64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Iron</span><br><span style="color: white; font-weight:bold; font-size:1rem;">{ir}mg</span></div>
+</div>
+""", unsafe_allow_html=True)def render_food_logger():
     # 1. CSS to Style the Container to look like a "Glass Card"
     st.markdown("""
     <style>
