@@ -281,7 +281,7 @@ def get_gemini_response(prompt, image=None, json_mode=False):
             url, 
             headers={"Content-Type": "application/json"}, 
             json=payload,
-            timeout=29
+            timeout=10
         )
         
         # Check for errors (404, 403, 500, etc)
