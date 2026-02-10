@@ -235,14 +235,13 @@ def get_gemini_response(prompt, image=None, json_mode=False):
         if json_mode:
             payload["generationConfig"] = {"response_mime_type": "application/json"}
 
-            response = requests.post(
+        response = requests.post(
             url, 
             headers={"Content-Type": "application/json"}, 
             json=payload, 
             timeout=29  # <--- Gives the AI 30 seconds to think
         )
 
-        )
         
         # --- THE DIAGNOSTIC SAFETY NET ---
         if response.status_code == 404:
@@ -282,7 +281,7 @@ def get_gemini_response(prompt, image=None, json_mode=False):
             url, 
             headers={"Content-Type": "application/json"}, 
             json=payload,
-            timeout=10
+            timeout=29
         )
         
         # Check for errors (404, 403, 500, etc)
