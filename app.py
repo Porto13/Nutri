@@ -209,17 +209,15 @@ if 'active_tab' not in st.session_state:
 
 def get_gemini_response(prompt, image=None, json_mode=False):
     """
-    Direct API Connection with Auto-Diagnostics.
-    If the model is not found, it asks Google what models ARE available.
+    Direct API Connection with Auto-Retry for 503 (Server Overload) Errors.
     """
     api_key = st.secrets.get("GEMINI_API_KEY")
     if not api_key: return "ERROR: No API Key found in secrets."
 
-    # Standard URL for Gemini
-    # Use the 'latest' alias to avoid version-specific quota issues
+    # Use 'gemini-flash-latest' to get the most stable free model
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
-
-    # 1. Prepare the Image
+    
+    # 1. Prepare Image
     parts = [{"text": prompt}]
     if image:
         try:
@@ -230,41 +228,38 @@ def get_gemini_response(prompt, image=None, json_mode=False):
         except Exception as e:
             return f"IMAGE ERROR: {str(e)}"
 
-    # 2. Send Request
-    try:
-        payload = {"contents": [{"parts": parts}]}
-        if json_mode:
-            payload["generationConfig"] = {"response_mime_type": "application/json"}
+    # 2. Payload
+    payload = {"contents": [{"parts": parts}]}
+    if json_mode:
+        payload["generationConfig"] = {"response_mime_type": "application/json"}
 
-        response = requests.post(
-            url, 
-            headers={"Content-Type": "application/json"}, 
-            json=payload, 
-            timeout=29  # <--- Gives the AI 30 seconds to think
-        )
-
-        
-        # --- THE DIAGNOSTIC SAFETY NET ---
-        if response.status_code == 404:
-            # The model wasn't found. Let's ask what DOES exist.
-            list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
-            list_res = requests.get(list_url)
+    # 3. Send Request with RETRY Logic (The New Part)
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(
+                url, 
+                headers={"Content-Type": "application/json"}, 
+                json=payload, 
+                timeout=30
+            )
             
-            if list_res.status_code == 200:
-                # Parse the list and find standard models
-                models = list_res.json().get('models', [])
-                names = [m['name'].split('/')[-1] for m in models if 'generateContent' in m.get('supportedGenerationMethods', [])]
-                return f"DIAGNOSTIC: Your Key is valid, but cannot see 'gemini-1.5-flash'. Available models: {names}"
-            else:
-                return f"CRITICAL: Key cannot even list models. (Status: {list_res.status_code})"
-        
-        if response.status_code != 200:
+            # SUCCESS: Return the text immediately
+            if response.status_code == 200:
+                return response.json()['candidates'][0]['content']['parts'][0]['text']
+            
+            # BUSY SIGNAL (503): Wait and try again
+            if response.status_code == 503:
+                time.sleep(2)  # Wait 2 seconds
+                continue       # Loop back and try again
+            
+            # OTHER ERRORS: Stop and report
             return f"API ERROR ({response.status_code}): {response.text}"
             
-        return response.json()['candidates'][0]['content']['parts'][0]['text']
-        
-    except Exception as e:
-        return f"CONNECTION ERROR: {str(e)}"
+        except Exception as e:
+            return f"CONNECTION ERROR: {str(e)}"
+            
+    return "SERVER BUSY: Google is overloaded right now. Please try again in a minute."
 
 
     # 2. Construct the Payload
