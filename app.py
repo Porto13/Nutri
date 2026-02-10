@@ -215,7 +215,8 @@ def get_gemini_response(prompt, image=None, json_mode=False):
     if not api_key: return "ERROR: No API Key found in secrets."
 
     # Standard URL for Gemini 1.5 Flash
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    # Updated to use the model available to your key (Gemini 2.0 Flash)
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
     
     # 1. Prepare the Image
     parts = [{"text": prompt}]
