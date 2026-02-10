@@ -847,6 +847,23 @@ def main():
             if st.button("Logout"):
                 st.session_state.user = None
                 st.rerun()
+            st.markdown("---")
+            st.subheader("🔧 Diagnostics")
+            if st.button("Test AI Connection"):
+                try:
+                    # Force the key from secrets
+                    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                    
+                    # Ask Google: "What models can I use?"
+                    models = list(genai.list_models())
+                    
+                    st.success(f"✅ Connection Success! Found {len(models)} models.")
+                    
+                    # Print the exact names to the screen
+                    model_names = [m.name for m in models if 'generateContent' in m.supported_generation_methods]
+                    st.code(model_names)
+                except Exception as e:
+                    st.error(f"❌ Connection Failed: {e}")
 
         if st.session_state.active_tab == "Dashboard":
             render_dashboard()
