@@ -45,7 +45,7 @@ def safe_int(val, default=0):
 # 2. GOOGLE SHEETS CONNECTION
 # -----------------------------------------------------------------------------
 
-# CONSTANT SHEET ID (Fixed)
+# CONSTANT SHEET ID
 SHEET_ID = "1_9K1IT3zaDGNKfxwnnSIe7L881wJWVdztIwGci3B0vg"
 
 def get_db_connection():
@@ -231,7 +231,6 @@ def fetch_all_users():
     if not client:
         return [] # Return empty list if no DB
     try:
-        # FIX: Use get_main_sheet
         sheet = get_main_sheet(client)
         return sheet.get_all_records()
     except:
@@ -244,7 +243,6 @@ def register_user(username, password):
         return False, "Database not connected. Add GCP secrets."
         
     try:
-        # FIX: Use get_main_sheet
         sheet = get_main_sheet(client)
         records = sheet.get_all_records()
         for r in records:
@@ -259,7 +257,7 @@ def register_user(username, password):
             2000, 150, 200, 20, 50, 25, 30, 2000, 3000, 15, # Default Macros
             "Bronze", 1.0, 0, 0, 0, # Rank Data
             25, "Male", 70, 175, 1.2, "Maintain", "metric", # Demographics
-            "No" # FIX: Approval Status (Default No)
+            "No" # Approval Status
         ]
         sheet.append_row(row)
         return True, "Registration successful! Account pending admin approval."
@@ -274,13 +272,8 @@ def log_food_to_sheet(user_id, entry_data):
         return
 
     try:
-        # Note: We keep Food_Logs as a separate sheet assumption, but based on prompt,
-        # we generally should stick to ID. However, Food_Logs usually is separate.
-        # If Food_Logs is in the SAME file, we can open by key and get worksheet by name.
-        # Assuming Food_Logs is Sheet 2 or named "Food_Logs".
+        # Assuming Food_Logs is a separate sheet/tab. 
         # Safe approach: Open by key, then get worksheet by title "Food_Logs"
-        # If "Food_Logs" doesn't exist, we might fail. 
-        # Given "The Data Mapping" prompt earlier: "Sheet 2: Food_Logs".
         sheet = client.open_by_key(SHEET_ID).worksheet("Food_Logs")
         
         row = [
@@ -316,7 +309,6 @@ def update_user_targets_db(user_id, new_data):
         return True
 
     try:
-        # FIX: Use get_main_sheet
         sheet = get_main_sheet(client)
         # Find row by User_ID (Column 1)
         cell = sheet.find(user_id)
@@ -335,7 +327,7 @@ def update_user_targets_db(user_id, new_data):
         return False
 
 # -----------------------------------------------------------------------------
-# 5. UI COMPONENTS (CRITICAL FIX: unsafe_allow_html=True everywhere)
+# 5. UI COMPONENTS
 # -----------------------------------------------------------------------------
 
 def render_rank_card(user):
@@ -392,9 +384,9 @@ def render_rank_card(user):
 def render_dashboard():
     user = st.session_state.user
     
-    # Onboarding Check with Button
+    # FIX: Only show warning if goal is explicitly 0
     goal_check = safe_float(user.get('Calorie_Goal', 0))
-    if goal_check == 0 or goal_check == 2000:
+    if goal_check == 0:
         st.warning("⚠️ Profile Incomplete. Your nutrition targets are set to default.")
         if st.button("Set Nutrition Targets Now"):
             st.session_state.active_tab = "Identity"
@@ -453,6 +445,8 @@ def render_dashboard():
                 
                 pct = min((val / goal_f) * 100, 100)
                 color = ACCENT_EMERALD if pct <= 100 else "#f43f5e"
+                
+                # FIX: Add unsafe_allow_html=True to prevent raw HTML leak
                 st.markdown(f"""
                 <div style="margin-bottom: 1rem;">
                     <div style="display: flex; justify-content: space-between; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; margin-bottom: 0.25rem;">
@@ -743,7 +737,7 @@ def render_login():
                         for user in all_users:
                             # Check Username, Password
                             if str(user.get("Username")) == username and str(user.get("Password")) == password:
-                                # FIX: APPROVAL CHECK (Last Column Check Logic)
+                                # APPROVAL CHECK
                                 approved_status = str(user.get("Approved", "No")).lower()
                                 if "y" in approved_status:
                                     found_user = user
