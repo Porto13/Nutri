@@ -454,7 +454,7 @@ def render_rank_card(user):
 def render_dashboard():
     user = st.session_state.user
     
-    # FIX: Only show warning if goal is explicitly 0 (Profile Incomplete check)
+    # Profile Check
     goal_check = safe_float(user.get('Calorie_Goal', 0))
     if goal_check == 0:
         st.warning("⚠️ Profile Incomplete. Your nutrition targets are set to default.")
@@ -463,23 +463,20 @@ def render_dashboard():
             st.rerun()
 
     render_rank_card(user)
-    st.write("") # Spacer
+    st.write("") 
 
     logs = get_today_logs(user['User_ID'])
     
-    # Aggregations using safe_float to prevent crashes
+    # --- CALCULATE TOTALS ---
     totals = {k: sum(safe_float(l.get(k, 0)) for l in logs) for k in ['Calories', 'Protein', 'Carbs', 'Saturated_Fat', 'Unsaturated_Fat', 'Fiber', 'Sugar', 'Sodium', 'Potassium', 'Iron']}
     
     col1, col2 = st.columns([1, 2])
     
+    # --- ENERGY CARD ---
     with col1:
-        # Default calorie goal to 2000 if 0 to avoid division by zero
-        goal = safe_float(user.get('Calorie_Goal', 2000))
-        if goal == 0: goal = 2000
-
+        goal = safe_float(user.get('Calorie_Goal', 2000)) or 2000
         pct = min((totals['Calories']/goal)*100, 100)
         
-        # Fixed: Added unsafe_allow_html=True
         st.markdown(f"""
         <div class="glass-card" style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
             <h4 style="color: #64748b; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.1em; margin-bottom: 1rem;">Energy Balance</h4>
@@ -493,18 +490,13 @@ def render_dashboard():
         </div>
         """, unsafe_allow_html=True)
 
+    # --- NUTRIENT TALLY CARD ---
     with col2:
-        # Fixed: Added unsafe_allow_html=True
         st.markdown(f'<div class="glass-card">', unsafe_allow_html=True)
         st.markdown("<h4 style='color: #64748b; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.1em; margin-bottom: 1rem;'>Nutrient Tally</h4>", unsafe_allow_html=True)
         
         m_cols = st.columns(3)
-        # Default values map to ensure we don't display 0/0
-        defaults = {
-            'Protein': 150, 'Carbs': 200, 'Fiber': 30,
-            'Saturated_Fat': 20, 'Unsaturated_Fat': 50, 'Sugar': 30,
-            'Sodium': 2300, 'Potassium': 3500, 'Iron': 18
-        }
+        defaults = {'Protein': 150, 'Carbs': 200, 'Fiber': 30, 'Saturated_Fat': 20, 'Unsaturated_Fat': 50, 'Sugar': 30, 'Sodium': 2300, 'Potassium': 3500, 'Iron': 18}
         
         metrics = [
             ("Protein", totals['Protein'], user.get('Protein_Goal',0), 'g'),
@@ -521,16 +513,13 @@ def render_dashboard():
         for i, (label, val, goal, unit) in enumerate(metrics):
             with m_cols[i % 3]:
                 goal_f = safe_float(goal)
-                # Fix: Default to reasonable values if goal is 0
                 if goal_f == 0: 
-                    # Map "Sat. Fat" to "Saturated_Fat" key in defaults
                     key = label.replace(". ", "_")
                     goal_f = defaults.get(key, 100)
                 
                 pct = min((val / goal_f) * 100, 100)
                 color = ACCENT_EMERALD if pct <= 100 else "#f43f5e"
                 
-                # Fixed: Added unsafe_allow_html=True
                 st.markdown(f"""
                 <div style="margin-bottom: 1rem;">
                     <div style="display: flex; justify-content: space-between; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; margin-bottom: 0.25rem;">
@@ -542,29 +531,99 @@ def render_dashboard():
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-        # Fixed: Added unsafe_allow_html=True
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.write("")
-    # Fixed: Added unsafe_allow_html=True
-    st.markdown(f"""
+    
+    # --- NEW: INTERACTIVE LOG LIST (HTML) ---
+    # This replaces the dataframe with a custom HTML structure
+    
+    # 1. Start the Card
+    html_list = f"""
     <div class="glass-card">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid {THEME_BORDER}; padding-bottom: 1rem; margin-bottom: 1rem;">
             <h3 style="margin: 0; font-size: 1.25rem;">Today's Logs</h3>
             <span style="font-size: 0.75rem; color: #64748b;">{date.today().strftime('%B %d, %Y')}</span>
         </div>
-    """, unsafe_allow_html=True)
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+    """
     
     if not logs:
-        st.info("No logs recorded today. Use the 'Log Food' tab.")
+        html_list += """<div style="padding: 1rem; text-align: center; color: #64748b; font-style: italic;">No logs yet. Go eat something! 🍎</div>"""
     else:
-        df = pd.DataFrame(logs)
-        display_df = df[['Meal_Name', 'Calories', 'Protein', 'Carbs', 'Saturated_Fat', 'Sodium']].copy()
-        display_df.columns = ['Meal', 'Kcal', 'Prot (g)', 'Carbs (g)', 'Sat.Fat (g)', 'Sod (mg)']
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        for log in logs:
+            # Prepare Values
+            name = log.get('Meal_Name', 'Unknown Meal')
+            kcal = int(safe_float(log.get('Calories', 0)))
+            prot = float(safe_float(log.get('Protein', 0)))
+            carbs = float(safe_float(log.get('Carbs', 0)))
+            sat_fat = float(safe_float(log.get('Saturated_Fat', 0)))
+            
+            # Additional nutrients for expanded view
+            unsat_fat = float(safe_float(log.get('Unsaturated_Fat', 0)))
+            fiber = float(safe_float(log.get('Fiber', 0)))
+            sugar = float(safe_float(log.get('Sugar', 0)))
+            sodium = float(safe_float(log.get('Sodium', 0)))
+            potassium = float(safe_float(log.get('Potassium', 0)))
+            iron = float(safe_float(log.get('Iron', 0)))
+
+            html_list += f"""
+            <details style="
+                background: rgba(15, 23, 42, 0.4); 
+                border: 1px solid rgba(51, 65, 85, 0.3); 
+                border-radius: 0.75rem; 
+                overflow: hidden; 
+                transition: all 0.2s;
+            ">
+                <summary style="
+                    padding: 1rem; 
+                    cursor: pointer; 
+                    list-style: none; 
+                    display: flex; 
+                    align-items: center; 
+                    justify-content: space-between;
+                    font-size: 0.9rem;
+                ">
+                    <div style="font-weight: 700; color: white; flex: 2;">{name}</div>
+                    
+                    <div style="display: flex; gap: 1.5rem; font-family: monospace; color: #cbd5e1; font-weight: 600;">
+                        <span style="color: {ACCENT_EMERALD};">🔥 {kcal}</span>
+                        <span>P: {prot:g}</span>
+                        <span>C: {carbs:g}</span>
+                        <span style="color: #94a3b8;">Sat: {sat_fat:g}</span>
+                    </div>
+                </summary>
+                
+                <div style="
+                    padding: 0 1rem 1rem 1rem; 
+                    border-top: 1px solid rgba(51, 65, 85, 0.3); 
+                    background: rgba(15, 23, 42, 0.6);
+                ">
+                    <p style="font-size: 0.7rem; text-transform: uppercase; color: #64748b; margin: 0.75rem 0 0.5rem 0; font-weight: 800; letter-spacing: 0.05em;">Full Nutrient Profile</p>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; font-size: 0.8rem;">
+                        
+                        <div><span style="color: #64748b;">Protein:</span> <span style="color: white; font-weight: bold;">{prot}g</span></div>
+                        <div><span style="color: #64748b;">Carbs:</span> <span style="color: white; font-weight: bold;">{carbs}g</span></div>
+                        <div><span style="color: #64748b;">Fiber:</span> <span style="color: white; font-weight: bold;">{fiber}g</span></div>
+                        
+                        <div><span style="color: #64748b;">Sat. Fat:</span> <span style="color: white; font-weight: bold;">{sat_fat}g</span></div>
+                        <div><span style="color: #64748b;">Unsat. Fat:</span> <span style="color: white; font-weight: bold;">{unsat_fat}g</span></div>
+                        <div><span style="color: #64748b;">Sugar:</span> <span style="color: white; font-weight: bold;">{sugar}g</span></div>
+                        
+                        <div><span style="color: #64748b;">Sodium:</span> <span style="color: white; font-weight: bold;">{sodium}mg</span></div>
+                        <div><span style="color: #64748b;">Potassium:</span> <span style="color: white; font-weight: bold;">{potassium}mg</span></div>
+                        <div><span style="color: #64748b;">Iron:</span> <span style="color: white; font-weight: bold;">{iron}mg</span></div>
+                        
+                    </div>
+                </div>
+            </details>
+            """
     
-    # Fixed: Added unsafe_allow_html=True
-    st.markdown("</div>", unsafe_allow_html=True)
+    # Close the Card
+    html_list += "</div></div>"
+    
+    # Render HTML
+    st.markdown(html_list, unsafe_allow_html=True)
 
 def render_food_logger():
     st.title("Add Food 🍎")
